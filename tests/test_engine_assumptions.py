@@ -22,6 +22,8 @@ from tests.helpers import (
     refresh,
     roll,
     set_hand,
+    build_cut_scenario,
+    cut_road,
     start_turn_of,
     to_roll_of,
 )
@@ -263,3 +265,15 @@ def test_road_building_requires_road_money():
     assert not any(a.action_type == ActionType.PLAY_ROAD_BUILDING for a in game.state.playable_actions)
     set_hand(game, p1, WOOD=1, BRICK=1)
     assert any(a.action_type == ActionType.PLAY_ROAD_BUILDING for a in game.state.playable_actions)
+
+
+def raw(game, act):
+    game.execute(act, validate_action=False)
+
+
+def test_cut_road_keeps_longest_road_below_five():
+    game, p1, p2 = build_cut_scenario(raw)
+    assert get_longest_road_color(game.state) == p1
+    cut_road(game, p2, raw)
+    assert game.state.board.road_lengths[p1] == 3
+    assert get_longest_road_color(game.state) == p1

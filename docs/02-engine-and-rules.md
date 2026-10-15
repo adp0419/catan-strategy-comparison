@@ -62,16 +62,33 @@ Agents must never touch `catanatron` internals directly. If the engine changes o
 
 ## Verified engine behavior (catanatron 3.2.1)
 
-Confirmed by `tests/test_engine_assumptions.py`. Re-run the suite whenever the pinned engine version changes.
+Raw engine behavior is pinned in `tests/test_engine_assumptions.py`. The wrapper's corrections are pinned in `tests/test_engine.py`. Re-run both whenever the pinned engine version changes.
 
-- **2 players work natively.** No inert seats or workaround needed. Games run to completion and setup follows snake order P1, P2, P2, P1, with only the second settlement paying out.
-- **No player trading exists in the engine.** The only trade action is `MARITIME_TRADE` (4:1 bank, 3:1 generic, 2:1 resource port, all verified). The wrapper filter is a safety net, not a requirement.
-- **Seat order is decided by the seed.** `State` shuffles players with `random.sample`. The wrapper must force seat order explicitly so matched pair seat swaps actually swap.
-- **Discards are random, not chosen.** On a 7, the engine offers a single `DISCARD` action with value `None` and picks the discarded cards at random. Neither agent controls discards. This is symmetric, so it does not bias A vs B, but discard strategy is outside the experiment.
-- **All randomness shares Python's global `random` stream.** Dice, dev deck shuffle, steals, discards, and any `random` call an agent makes all draw from it. A `ROLL` action can carry explicit dice (`Action(color, ROLL, (d1, d2))` executed with `validate_action=False`), which is how the wrapper will feed each game an independent seeded dice stream.
-- **Dev cards can be played on the turn they are bought.** This deviates from the official rule, so `legal_actions` in `src/common/engine.py` removes any Knight, Year of Plenty, Monopoly, or Road Building play unless the player held that card before the turn started. Victory point cards count immediately on purchase. The engine already enforces one dev card play per turn, and allows a Knight before rolling.
-- **Road Building requires road money (engine bug).** The Road Building card is only offered when the player can already afford a road (1 wood, 1 brick), and the free road phase ends early if they cannot. Not yet fixed; `tests/test_engine_assumptions.py::test_road_building_requires_road_money` pins the current behavior.
-- **Largest army transfers only when strictly exceeded** (3 to take it, 4 to take it from a holder of 3). Longest road likewise needs 5 and transfers only when strictly beaten.
-- **The legal action list is cached.** `state.playable_actions` must be regenerated after any direct state edit (tests only; agents never edit state).
-- **No strong built-in bot ships in the base package.** Only `RandomPlayer`, `WeightedRandomPlayer`, and `VictoryPointPlayer` (greedy on immediate VP). The stronger AlphaBeta and value bots live in a separate package. Phase 2's "competitive with the engine's built-in bot" target needs a decision.
-- **Not yet covered:** longest road recomputation when a road is cut by an enemy settlement. The engine's cut logic reassigns the holder by max length without re-checking the 5 segment minimum, which is a possible bug worth a dedicated test before any agent depends on it.
+### Correct as shipped
+
+- **2 players work natively.** Games run to completion. Setup is snake order P1, P2, P2, P1 and only the second settlement pays out.
+- **No player trading exists in the engine.** The only trade action is `MARITIME_TRADE`: 4:1 bank, 3:1 generic, 2:1 resource port, all verified. `legal_actions` also whitelists action types as a safety net.
+- **Robber and discards.** A 7 makes every player over 7 cards discard half, then the roller moves the robber and may steal.
+- **Bonus cards.** Longest road needs 5 and transfers only when strictly beaten. Largest army needs 3 knights and transfers only when strictly beaten.
+- **Dev deck** is the base game 14 / 5 / 2 / 2 / 2. **Victory** at 10 is detected on the triggering action.
+- **One dev card play per turn**, and a Knight may be played before rolling.
+
+### Fixed in the wrapper (`src/common/engine.py`)
+
+- **Seat order.** The engine shuffles seats from the seed. `new_game(seed, order)` forces the order after setup, and the board and dev deck depend only on the seed, so a seat swap keeps the identical board.
+- **Dev cards played on the turn bought.** `legal_actions` removes Knight, Year of Plenty, Monopoly, and Road Building plays unless the card was held before the turn started. Victory point cards still count immediately.
+- **Road Building required road money.** The engine only offered the card when the player could already afford a road, and ended the free road phase early without wood and brick. The wrapper offers the card whenever a free road can be placed and grants both free roads, stopping early only when no road can be placed.
+- **Longest road after a cut.** When a settlement split a road, the engine reassigned longest road to the longest remaining road even below 5, and did not remove the 2 VP. The wrapper recomputes: the card goes to a unique leader with 5 or more, otherwise it is set aside, and VP move accordingly.
+- **Randomness.** The engine uses Python's global `random` for everything. The wrapper resolves dice from a per game `dice_rng` and steals and discards from a per game `event_rng`, both seeded from the game seed. Agent randomness can no longer shift the dice, so matched pairs see the same roll sequence by roll index.
+- **Seed 0.** `Game(seed=0)` treats 0 as no seed. `new_game` seeds the global stream first so every seed, including 0, is reproducible.
+
+### Known deviations kept
+
+- **Discards are random, not chosen.** The engine offers one `DISCARD` action and the wrapper picks the cards from `event_rng`. Symmetric for both agents, so it does not bias A vs B.
+- **Non knight dev cards can only be played after rolling.** The official rules allow any dev card before the roll. Symmetric; revisit only if it matters.
+- **The legal action list is cached** in `state.playable_actions`. Agents only ever see `legal_actions(game)`, and tests that edit state directly must regenerate it.
+- **No strong built-in bot ships in the base package.** Only `RandomPlayer`, `WeightedRandomPlayer`, and `VictoryPointPlayer`. The stronger AlphaBeta and value bots live in a separate package. Phase 2's "competitive with the engine's built-in bot" target needs a decision.
+
+## Agent interface
+
+Agents never see a `Game`. Each agent has a `name` and implements `decide(state, actions) -> action`, where `state` is `extract_state(game, color)` and `actions` is `legal_actions(game)`. `play_game(agent_a, agent_b, seed, swap_order)` drives the loop, rejects any action not in the legal list, and returns a log dict with `seed`, `board_hash`, `agents`, `seat_order`, `winner`, `turns`, `final_vp`, `rolls`, and `num_actions`. Slots are `"a"` and `"b"` so an agent can play itself.

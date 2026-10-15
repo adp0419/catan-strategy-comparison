@@ -79,3 +79,52 @@ def extend_road(game, color, target):
         act = best_road(game, color)
         assert act is not None, "ran out of road placements"
         game.execute(act)
+
+
+CUT_PATH = [0, 5, 4, 3, 2, 1, 6]
+CUT_NODE = 3
+CUT_LINK = 12
+CUT_HOME = 11
+
+
+def edge_act(game, a, b):
+    color = game.state.current_color()
+    return Action(color, ActionType.BUILD_ROAD, (a, b))
+
+
+def far_settlement(game, avoid):
+    from catanatron.models.board import get_node_distances
+
+    dist = get_node_distances()
+    acts = [a for a in game.state.playable_actions if a.action_type == ActionType.BUILD_SETTLEMENT]
+    return max(acts, key=lambda a: (min(dist[a.value][n] for n in avoid), -a.value))
+
+
+def build_cut_scenario(do):
+    game = new_game()
+    p1, p2 = game.state.colors
+    avoid = CUT_PATH + [CUT_LINK, CUT_HOME]
+    setup = [
+        Action(p1, ActionType.BUILD_SETTLEMENT, CUT_PATH[0]),
+        Action(p1, ActionType.BUILD_ROAD, (CUT_PATH[0], CUT_PATH[1])),
+        Action(p2, ActionType.BUILD_SETTLEMENT, CUT_HOME),
+        Action(p2, ActionType.BUILD_ROAD, (CUT_HOME, CUT_LINK)),
+    ]
+    for act in setup:
+        do(game, act)
+    for _ in range(2):
+        do(game, far_settlement(game, avoid))
+        do(game, game.state.playable_actions[0])
+    start_turn_of(game, p1)
+    for a, b in zip(CUT_PATH[1:], CUT_PATH[2:]):
+        set_hand(game, p1, WOOD=1, BRICK=1)
+        do(game, Action(p1, ActionType.BUILD_ROAD, (a, b)))
+    return game, p1, p2
+
+
+def cut_road(game, p2, do):
+    start_turn_of(game, p2)
+    set_hand(game, p2, WOOD=1, BRICK=1)
+    do(game, Action(p2, ActionType.BUILD_ROAD, (CUT_LINK, CUT_NODE)))
+    set_hand(game, p2, WOOD=1, BRICK=1, SHEEP=1, WHEAT=1)
+    do(game, Action(p2, ActionType.BUILD_SETTLEMENT, CUT_NODE))

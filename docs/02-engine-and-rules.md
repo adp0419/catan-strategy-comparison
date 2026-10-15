@@ -59,3 +59,19 @@ Even though the engine is external, wrap it. `src/common/engine.py` exposes:
 - `play_game(agent_a, agent_b, seed, swap_order) -> GameLog`
 
 Agents must never touch `catanatron` internals directly. If the engine changes or is replaced, only this wrapper changes.
+
+## Verified engine behavior (catanatron 3.2.1)
+
+Confirmed by `tests/test_engine_assumptions.py`. Re-run the suite whenever the pinned engine version changes.
+
+- **2 players work natively.** No inert seats or workaround needed. Games run to completion and setup follows snake order P1, P2, P2, P1, with only the second settlement paying out.
+- **No player trading exists in the engine.** The only trade action is `MARITIME_TRADE` (4:1 bank, 3:1 generic, 2:1 resource port, all verified). The wrapper filter is a safety net, not a requirement.
+- **Seat order is decided by the seed.** `State` shuffles players with `random.sample`. The wrapper must force seat order explicitly so matched pair seat swaps actually swap.
+- **Discards are random, not chosen.** On a 7, the engine offers a single `DISCARD` action with value `None` and picks the discarded cards at random. Neither agent controls discards. This is symmetric, so it does not bias A vs B, but discard strategy is outside the experiment.
+- **All randomness shares Python's global `random` stream.** Dice, dev deck shuffle, steals, discards, and any `random` call an agent makes all draw from it. A `ROLL` action can carry explicit dice (`Action(color, ROLL, (d1, d2))` executed with `validate_action=False`), which is how the wrapper will feed each game an independent seeded dice stream.
+- **Dev cards can be played on the turn they are bought.** This deviates from the official rule, so `legal_actions` in `src/common/engine.py` removes any Knight, Year of Plenty, Monopoly, or Road Building play unless the player held that card before the turn started. Victory point cards count immediately on purchase. The engine already enforces one dev card play per turn, and allows a Knight before rolling.
+- **Road Building requires road money (engine bug).** The Road Building card is only offered when the player can already afford a road (1 wood, 1 brick), and the free road phase ends early if they cannot. Not yet fixed; `tests/test_engine_assumptions.py::test_road_building_requires_road_money` pins the current behavior.
+- **Largest army transfers only when strictly exceeded** (3 to take it, 4 to take it from a holder of 3). Longest road likewise needs 5 and transfers only when strictly beaten.
+- **The legal action list is cached.** `state.playable_actions` must be regenerated after any direct state edit (tests only; agents never edit state).
+- **No strong built-in bot ships in the base package.** Only `RandomPlayer`, `WeightedRandomPlayer`, and `VictoryPointPlayer` (greedy on immediate VP). The stronger AlphaBeta and value bots live in a separate package. Phase 2's "competitive with the engine's built-in bot" target needs a decision.
+- **Not yet covered:** longest road recomputation when a road is cut by an enemy settlement. The engine's cut logic reassigns the holder by max length without re-checking the 5 segment minimum, which is a possible bug worth a dedicated test before any agent depends on it.

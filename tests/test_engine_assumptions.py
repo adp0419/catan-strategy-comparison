@@ -277,3 +277,10 @@ def test_cut_road_keeps_longest_road_below_five():
     cut_road(game, p2, raw)
     assert game.state.board.road_lengths[p1] == 3
     assert get_longest_road_color(game.state) == p1
+
+
+def test_raw_engine_lets_red_numbers_touch():
+    from src.common.engine import red_numbers_touch
+
+    touching = sum(red_numbers_touch(new_game(seed).state.board.map) for seed in range(1, 51))
+    assert touching > 0

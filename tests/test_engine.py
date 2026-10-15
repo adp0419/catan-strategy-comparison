@@ -18,6 +18,7 @@ from src.common.engine import (
     legal_actions,
     new_game,
     play_game,
+    red_numbers_touch,
     step,
 )
 from tests.helpers import build_cut_scenario, cut_road, first_of, play_setup, refresh, set_hand, start_turn_of
@@ -245,3 +246,11 @@ def test_extract_state_board_shape():
     assert len(board["ports"]) == 9
     assert Counter(p["resource"] for p in board["ports"])["3:1"] == 4
     assert Counter(h["resource"] for h in board["hexes"])["DESERT"] == 1
+
+
+def test_red_numbers_never_touch():
+    for seed in range(300):
+        game = new_game(seed)
+        assert not red_numbers_touch(game.state.board.map)
+        tiles = game.state.board.map.land_tiles.values()
+        assert sorted(t.number for t in tiles if t.number) == sorted([2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12])

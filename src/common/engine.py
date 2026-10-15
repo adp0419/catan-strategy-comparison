@@ -16,7 +16,7 @@ from catanatron.models.enums import (
     ActionPrompt,
     ActionType,
 )
-from catanatron.models.map import PORT_DIRECTION_TO_NODEREFS
+from catanatron.models.map import BASE_MAP_TEMPLATE, PORT_DIRECTION_TO_NODEREFS, CatanMap
 from catanatron.models.player import Color, Player
 from catanatron.state_functions import (
     get_actual_victory_points,
@@ -56,12 +56,27 @@ ALLOWED = {
     *DEV_PLAYS,
 }
 
+RED_NUMBERS = (6, 8)
+
 _boards = weakref.WeakKeyDictionary()
+
+
+def red_numbers_touch(catan_map):
+    reds = [set(t.nodes.values()) for t in catan_map.land_tiles.values() if t.number in RED_NUMBERS]
+    return any(len(a & b) >= 2 for i, a in enumerate(reds) for b in reds[i + 1 :])
+
+
+def new_map():
+    while True:
+        catan_map = CatanMap.from_template(BASE_MAP_TEMPLATE)
+        if not red_numbers_touch(catan_map):
+            return catan_map
 
 
 def new_game(seed, order=SEATS):
     random.seed(seed)
-    game = Game([Player(c) for c in SEATS], seed=seed, vps_to_win=VPS_TO_WIN)
+    catan_map = new_map()
+    game = Game([Player(c) for c in SEATS], seed=seed, vps_to_win=VPS_TO_WIN, catan_map=catan_map)
     st = game.state
     st.players = sorted(st.players, key=lambda p: order.index(p.color))
     st.colors = tuple(order)

@@ -42,7 +42,7 @@ All production figures are **per dice roll**. In 1v1 both players' rolls pay out
 
 - `robber_adjusted_production(state, player, downtime) -> dict[resource, float]` long run production discounted by robber downtime, where `downtime` maps a hex's pip count to the share of rolls the robber sits on it (see `04-catan-strategy-reference.md`). An empty table gives plain production with no robber
 
-**Validation.** `python -m src.sim.validate_production` (or `make validate`) compares `expected_production` against the cards actually paid over 1,000 random games. Result at the end of Phase 1: every resource within 1.1 percent across 345,000 rolls with all z scores under 2.1, and observed over predicted variance of 1.000. A 100 game version runs in `tests/test_production_validation.py`.
+**Validation.** `python -m src.sim.validate_production` (or `make validate`) compares `expected_production` against the cards actually paid over 1,000 random games. Result: every resource within 0.44 percent across 344,000 rolls with all z scores under 0.9, and observed over predicted variance of 1.003. A 100 game version runs in `tests/test_production_validation.py`.
 
 **Downtime calibration is pending.** Random agents place the robber uniformly (about 1/19 of rolls per hex at every pip count), so their downtime table is meaningless for real play. Calibrate `downtime` from Agent A self play once Agent A's weights are frozen in Phase 2, and use the same frozen table for both agents.
 

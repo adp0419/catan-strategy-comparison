@@ -120,7 +120,15 @@ def road_building_open(game, color):
     )
 
 
+def action_key(act):
+    return (act.action_type.value, repr(act.value))
+
+
 def legal_actions(game):
+    return sorted(raw_legal_actions(game), key=action_key)
+
+
+def raw_legal_actions(game):
     st = game.state
     color = st.current_color()
     if st.is_road_building:

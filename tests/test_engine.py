@@ -320,3 +320,27 @@ def test_short_bank_pays_lone_claimant_the_remainder():
     apply(game, Action(p1, ActionType.ROLL, dice))
     assert player_num_resource_cards(game.state, p1, tile.resource) == before + 1
     assert game.state.resource_freqdeck[idx] == 0
+
+
+def test_game_reproducible_across_processes():
+    import json
+    import os
+    import subprocess
+    import sys
+
+    code = (
+        "import json; from src.agents.baselines import RandomAgent; from src.common.engine import play_game; "
+        "print(json.dumps(play_game(RandomAgent(1), RandomAgent(2), seed=12)))"
+    )
+    logs = []
+    for hashseed in ("1", "2"):
+        env = dict(os.environ, PYTHONHASHSEED=hashseed)
+        out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True)
+        logs.append(json.loads(out.stdout))
+    assert logs[0] == logs[1]
+
+
+def test_legal_actions_are_sorted():
+    game = new_game(3)
+    acts = legal_actions(game)
+    assert acts == sorted(acts, key=lambda a: (a.action_type.value, repr(a.value)))

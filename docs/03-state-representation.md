@@ -28,11 +28,19 @@ Probability of a number on one roll is `PIPS[n] / 36`.
 ## Required shared functions
 
 `src/common/probability.py`
-- `pips(number) -> int`
-- `node_pips(board, node) -> int`
-- `expected_production(state, player) -> dict[resource, float]` cards per turn by resource
-- `resource_diversity(state, player) -> int` count of distinct resources produced
-- `prob_of_resource_within(state, player, resource, turns) -> float`
+
+All production figures are **per dice roll**. In 1v1 both players' rolls pay out to everyone, so one full round is two rolls. Every function that reads production takes `robber=True` by default, which excludes the hex the robber currently sits on; pass `robber=False` for the structural value.
+
+- `pips(number) -> int`, `roll_prob(number) -> float`
+- `node_pips(board, node) -> int` pips over adjacent producing hexes, desert excluded
+- `node_production(board, node, robber_hex=None, mult=1) -> dict[resource, float]` cards per roll a building there would produce, for scoring spots not yet owned
+- `expected_production(state, player) -> dict[resource, float]` cards per roll by resource
+- `production_variance(state, player, extra=None) -> float` variance of total cards per roll. This is the number collision measure: two spots on the same number have the same mean as two spots on different numbers of equal probability, but higher variance. `extra={node: mult}` evaluates a hypothetical settlement or city
+- `resource_diversity(state, player) -> int` count of distinct resources produced, ignoring the robber
+- `resource_roll_prob(state, player, resource) -> float` chance a single roll pays at least one card of that resource
+- `prob_of_resource_within(state, player, resource, rolls) -> float`
+
+Planned, not built: robber-adjusted expected production (see `04-catan-strategy-reference.md`). It needs empirical robber placement frequencies per hex, which come from the simulation logs, so it lands after the production validation step.
 
 `src/common/board.py`
 - `adjacent_hexes(board, node)`, `adjacent_nodes(board, node)`

@@ -86,6 +86,23 @@ Every game writes a record:
 
 Full decision logs are large. Log them for a sampled subset (say 1 percent) and log summary records for all games. Store in `data/`, gitignored.
 
+### As implemented (`play_game` in `src/common/engine.py`)
+
+Players are recorded by slot, `"a"` or `"b"`, never by color, so an agent can play itself.
+
+| Field | Contents |
+|---|---|
+| `seed`, `board_hash`, `agents`, `seat_order` | what was played; `seat_order[0]` placed first |
+| `winner`, `turns`, `num_actions` | outcome; `winner` is `None` if the 1,000 turn cap was hit |
+| `final_vp`, `final` | per slot VP, settlements, cities, roads, road length, knights, VP cards, bonus card flags |
+| `production` | per slot cards received from dice, by resource |
+| `robber` | every robber move: turn, mover, hex id, victim, stolen card |
+| `dev_cards` | every dev card bought: turn, buyer, card |
+| `rolls` | every dice total in order |
+| `decisions` | only in sampled games: per decision the turn, player, chosen action, number of options, and for agents with a `scores` method the chosen score and the top 5 alternatives with scores |
+
+`run_match(..., decision_every=100)` records decisions for seeds divisible by 100, so 1 percent of games, chosen by seed so the sample is reproducible. A summary record is about 3 KB; one with decisions is about 25 KB. `agent_b_archetype` and `archetype_switches` arrive with Agent B.
+
 ## Analysis outputs
 
 In `results/`:

@@ -10,18 +10,25 @@ from src.analysis.stats import wilson
 from src.common.engine import play_game
 
 
+DECISION_EVERY = 100
+
+
+def records_decisions(seed, every=DECISION_EVERY):
+    return every > 0 and seed % every == 0
+
+
 def play_pair(job):
-    a_spec, b_spec, seed = job
+    a_spec, b_spec, seed, every = (*job, 0) if len(job) == 3 else job
     logs = []
     for swap in (False, True):
         a = make_agent(a_spec, seed * 2)
         b = make_agent(b_spec, seed * 2 + 1)
-        logs.append(play_game(a, b, seed, swap_order=swap))
+        logs.append(play_game(a, b, seed, swap_order=swap, record_decisions=records_decisions(seed, every)))
     return logs
 
 
-def run_match(a_spec, b_spec, pairs, start=1, workers=None):
-    jobs = [(a_spec, b_spec, seed) for seed in range(start, start + pairs)]
+def run_match(a_spec, b_spec, pairs, start=1, workers=None, decision_every=0):
+    jobs = [(a_spec, b_spec, seed, decision_every) for seed in range(start, start + pairs)]
     workers = workers or os.cpu_count()
     if workers == 1:
         results = map(play_pair, jobs)

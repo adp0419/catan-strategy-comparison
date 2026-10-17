@@ -363,21 +363,94 @@ def board_hash(game):
     return hashlib.sha1(raw.encode()).hexdigest()[:12]
 
 
-def play_game(agent_a, agent_b, seed, swap_order=False, turn_limit=TURNS_LIMIT):
+TOP_ALTERNATIVES = 5
+
+
+def jsonable(val, slots):
+    if isinstance(val, Color):
+        return slots[val]
+    if isinstance(val, (tuple, list)):
+        return [jsonable(v, slots) for v in val]
+    return val
+
+
+def action_json(act, slots):
+    return [act.action_type.value, jsonable(act.value, slots)]
+
+
+def hands(st):
+    return {c: [player_num_resource_cards(st, c, r) for r in RESOURCES] for c in st.colors}
+
+
+def decision_entry(st, agent, state, acts, act, slot, slots):
+    entry = {"turn": st.num_turns, "player": slot, "action": action_json(act, slots), "n_options": len(acts)}
+    if hasattr(agent, "scores"):
+        scores = agent.scores(state, acts)
+        ranked = sorted(zip(scores, range(len(acts))), key=lambda x: -x[0])[:TOP_ALTERNATIVES]
+        entry["score"] = scores[acts.index(act)]
+        entry["alternatives"] = [[action_json(acts[i], slots), sc] for sc, i in ranked]
+    return entry
+
+
+def history(st, slots):
+    hex_ids = {coord: t.id for coord, t in st.board.map.land_tiles.items()}
+    turn, robber, dev = 0, [], []
+    for act in st.actions:
+        if act.action_type == ActionType.END_TURN:
+            turn += 1
+        elif act.action_type == ActionType.MOVE_ROBBER:
+            coord, victim, card = act.value
+            robber.append({"turn": turn, "by": slots[act.color], "hex": hex_ids[coord], "victim": slots.get(victim), "stolen": card})
+        elif act.action_type == ActionType.BUY_DEVELOPMENT_CARD:
+            dev.append({"turn": turn, "by": slots[act.color], "card": act.value})
+    return robber, dev
+
+
+def final_summary(st, slots):
+    out = {}
+    for c in SEATS:
+        blds = st.buildings_by_color[c]
+        key = player_key(st, c)
+        out[slots[c]] = {
+            "vp": get_actual_victory_points(st, c),
+            "settlements": len(blds[SETTLEMENT]),
+            "cities": len(blds[CITY]),
+            "roads": len(blds[ROAD]),
+            "road_length": st.board.road_lengths[c],
+            "knights_played": get_played_dev_cards(st, c, "KNIGHT"),
+            "vp_cards": st.player_state[f"{key}_VICTORY_POINT_IN_HAND"],
+            "longest_road": st.player_state[f"{key}_HAS_ROAD"],
+            "largest_army": st.player_state[f"{key}_HAS_ARMY"],
+        }
+    return out
+
+
+def play_game(agent_a, agent_b, seed, swap_order=False, turn_limit=TURNS_LIMIT, record_decisions=False):
     order = (Color.BLUE, Color.RED) if swap_order else SEATS
     slots = {Color.RED: "a", Color.BLUE: "b"}
     agents = {Color.RED: agent_a, Color.BLUE: agent_b}
     game = new_game(seed, order)
-    while game.winning_color() is None and game.state.num_turns < turn_limit:
-        color = game.state.current_color()
+    st = game.state
+    production = {slots[c]: [0] * len(RESOURCES) for c in SEATS}
+    decisions = []
+    while game.winning_color() is None and st.num_turns < turn_limit:
+        color = st.current_color()
         acts = legal_actions(game)
-        act = agents[color].decide(extract_state(game, color), acts)
+        state = extract_state(game, color)
+        act = agents[color].decide(state, acts)
         if act not in acts:
             raise ValueError(f"{slots[color]} chose illegal action {act}")
+        if record_decisions:
+            decisions.append(decision_entry(st, agents[color], state, acts, act, slots[color], slots))
+        before = hands(st) if act.action_type == ActionType.ROLL else None
         apply(game, act)
-    st = game.state
+        if before:
+            after = hands(st)
+            for c in SEATS:
+                production[slots[c]] = [p + a - b for p, a, b in zip(production[slots[c]], after[c], before[c])]
     winner = game.winning_color()
-    return {
+    robber, dev = history(st, slots)
+    log = {
         "seed": seed,
         "board_hash": board_hash(game),
         "agents": {"a": agent_a.name, "b": agent_b.name},
@@ -385,6 +458,13 @@ def play_game(agent_a, agent_b, seed, swap_order=False, turn_limit=TURNS_LIMIT):
         "winner": slots[winner] if winner else None,
         "turns": st.num_turns,
         "final_vp": {slots[c]: get_actual_victory_points(st, c) for c in SEATS},
+        "final": final_summary(st, slots),
+        "production": {s: dict(zip(RESOURCES, v)) for s, v in production.items()},
+        "robber": robber,
+        "dev_cards": dev,
         "rolls": [sum(a.value) for a in st.actions if a.action_type == ActionType.ROLL],
         "num_actions": len(st.actions),
     }
+    if record_decisions:
+        log["decisions"] = decisions
+    return log

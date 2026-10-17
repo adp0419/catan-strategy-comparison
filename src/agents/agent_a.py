@@ -63,10 +63,12 @@ class GreedyAgent:
     def decide(self, state, actions):
         if len(actions) == 1:
             return actions[0]
+        scores = self.scores(state, actions)
+        return actions[max(range(len(actions)), key=lambda i: scores[i])]
+
+    def scores(self, state, actions):
         cache = {}
-        scores = [self.score(state, a, cache) for a in actions]
-        best = max(range(len(actions)), key=lambda i: scores[i])
-        return actions[best]
+        return [self.score(state, a, cache) for a in actions]
 
     def score(self, state, act, cache):
         kind = act.action_type

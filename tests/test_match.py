@@ -43,3 +43,39 @@ def test_summary():
 def test_pair_results_counts_sweeps_and_splits():
     logs = [{"winner": "a"}, {"winner": "a"}, {"winner": "b"}, {"winner": "b"}, {"winner": "a"}, {"winner": "b"}, {"winner": None}, {"winner": "a"}]
     assert pair_results(logs) == (1, 1, 2)
+
+
+def test_game_record_fields():
+    from src.agents.agent_a import GreedyAgent
+    from src.agents.baselines import RandomAgent
+    from src.common.engine import play_game
+
+    log = play_game(GreedyAgent(), RandomAgent(1), seed=5)
+    assert "decisions" not in log
+    winner = log["winner"]
+    assert log["final"][winner]["vp"] >= 10
+    assert set(log["production"]["a"]) == {"WOOD", "BRICK", "SHEEP", "WHEAT", "ORE"}
+    assert all(r["by"] in ("a", "b") and 0 <= r["hex"] < 19 for r in log["robber"])
+    assert all(d["card"] in ("KNIGHT", "VICTORY_POINT", "YEAR_OF_PLENTY", "ROAD_BUILDING", "MONOPOLY") for d in log["dev_cards"])
+    bought = sum(1 for d in log["dev_cards"] if d["by"] == winner)
+    assert log["final"][winner]["vp_cards"] <= bought
+
+
+def test_decisions_logged_when_asked():
+    import json
+
+    from src.agents.agent_a import GreedyAgent
+    from src.agents.baselines import RandomAgent
+    from src.common.engine import play_game
+
+    log = play_game(GreedyAgent(), RandomAgent(1), seed=5, record_decisions=True)
+    assert len(log["decisions"]) == log["num_actions"]
+    greedy = [d for d in log["decisions"] if d["player"] == "a" and d["n_options"] > 1]
+    assert greedy and all(d["score"] == d["alternatives"][0][1] for d in greedy)
+    json.dumps(log)
+
+
+def test_decision_sampling():
+    logs = run_match("greedy", "random", pairs=4, start=99, workers=1, decision_every=100)
+    flagged = {g["seed"] for g in logs if "decisions" in g}
+    assert flagged == {100}

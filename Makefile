@@ -1,5 +1,5 @@
 PY := .venv/bin/python
-GUI := ../catanatron-gui
+GUI := tools/catanatron-gui
 SEED ?= 1
 
 .PHONY: test smoke validate board gui gui-stop

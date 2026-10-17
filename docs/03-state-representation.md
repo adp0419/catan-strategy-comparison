@@ -35,12 +35,16 @@ All production figures are **per dice roll**. In 1v1 both players' rolls pay out
 - `node_pips(board, node) -> int` pips over adjacent producing hexes, desert excluded
 - `node_production(board, node, robber_hex=None, mult=1) -> dict[resource, float]` cards per roll a building there would produce, for scoring spots not yet owned
 - `expected_production(state, player) -> dict[resource, float]` cards per roll by resource
-- `production_variance(state, player, extra=None) -> float` variance of total cards per roll. This is the number collision measure: two spots on the same number have the same mean as two spots on different numbers of equal probability, but higher variance. `extra={node: mult}` evaluates a hypothetical settlement or city
+- `production_variance(state, player, extra=None, resource=None) -> float` variance of total cards per roll, or of one resource with `resource=`. This is the number collision measure: two spots on the same number have the same mean as two spots on different numbers of equal probability, but higher variance. `extra={node: mult}` evaluates a hypothetical settlement or city
 - `resource_diversity(state, player) -> int` count of distinct resources produced, ignoring the robber
 - `resource_roll_prob(state, player, resource) -> float` chance a single roll pays at least one card of that resource
 - `prob_of_resource_within(state, player, resource, rolls) -> float`
 
-Planned, not built: robber-adjusted expected production (see `04-catan-strategy-reference.md`). It needs empirical robber placement frequencies per hex, which come from the simulation logs, so it lands after the production validation step.
+- `robber_adjusted_production(state, player, downtime) -> dict[resource, float]` long run production discounted by robber downtime, where `downtime` maps a hex's pip count to the share of rolls the robber sits on it (see `04-catan-strategy-reference.md`). An empty table gives plain production with no robber
+
+**Validation.** `python -m src.sim.validate_production` (or `make validate`) compares `expected_production` against the cards actually paid over 1,000 random games. Result at the end of Phase 1: every resource within 1.1 percent across 345,000 rolls with all z scores under 2.1, and observed over predicted variance of 1.000. A 100 game version runs in `tests/test_production_validation.py`.
+
+**Downtime calibration is pending.** Random agents place the robber uniformly (about 1/19 of rolls per hex at every pip count), so their downtime table is meaningless for real play. Calibrate `downtime` from Agent A self play once Agent A's weights are frozen in Phase 2, and use the same frozen table for both agents.
 
 `src/common/board.py`
 - `adjacent_hexes(board, node)`, `adjacent_nodes(board, node)`

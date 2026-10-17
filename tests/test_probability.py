@@ -10,6 +10,7 @@ from src.common.probability import (
     production_variance,
     resource_diversity,
     resource_roll_prob,
+    robber_adjusted_production,
     roll_prob,
 )
 
@@ -114,3 +115,20 @@ def test_real_board_totals():
     total = sum(sum(pips(board["hexes"][h]["number"]) for h in n["hexes"]) for n in board["nodes"])
     assert total == sum(node_pips(board, n["id"]) for n in board["nodes"])
     assert max(node_pips(board, n["id"]) for n in board["nodes"]) <= 15
+
+
+def test_variance_by_resource():
+    state = fixture(me_settlements=[0], me_cities=[1])
+    p = 5 / 36
+    assert production_variance(state, "me", resource="ORE") == pytest.approx(p - p * p)
+    wheat = 3 * 3 * p - (3 * p) ** 2
+    assert production_variance(state, "me", resource="WHEAT") == pytest.approx(wheat)
+
+
+def test_robber_adjusted_production():
+    state = fixture(me_settlements=[0], me_cities=[1], robber_hex=0)
+    plain = expected_production(state, "me", robber=False)
+    assert robber_adjusted_production(state, "me", {}) == pytest.approx(plain)
+    adj = robber_adjusted_production(state, "me", {5: 0.2})
+    assert adj["WHEAT"] == pytest.approx(plain["WHEAT"] * 0.8)
+    assert adj["ORE"] == pytest.approx(plain["ORE"] * 0.8)

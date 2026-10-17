@@ -142,7 +142,7 @@ def legal_actions(game):
 def resolve(game, act):
     st = game.state
     kind = act.action_type
-    if kind == ActionType.ROLL:
+    if kind == ActionType.ROLL and act.value is None:
         rng = game.dice_rng
         return Action(act.color, kind, (rng.randint(1, 6), rng.randint(1, 6)))
     if kind == ActionType.MOVE_ROBBER and act.value[1] is not None:
@@ -153,6 +153,31 @@ def resolve(game, act):
         hand = player_deck_to_array(st, act.color)
         return Action(act.color, kind, game.event_rng.sample(hand, len(hand) // 2))
     return act
+
+
+def owed_by_roll(st, number):
+    owed = {c: Counter() for c in st.colors}
+    board = st.board
+    for coord, tile in board.map.land_tiles.items():
+        if tile.number != number or coord == board.robber_coordinate:
+            continue
+        for node in tile.nodes.values():
+            building = board.buildings.get(node)
+            if building:
+                owed[building[0]][tile.resource] += 2 if building[1] == CITY else 1
+    return owed
+
+
+def pay_lone_claimant(st, owed, bank_before):
+    for i, res in enumerate(RESOURCES):
+        claimants = [c for c in st.colors if owed[c][res] > 0]
+        total = sum(owed[c][res] for c in claimants)
+        if len(claimants) != 1 or total <= bank_before[i]:
+            continue
+        give = min(owed[claimants[0]][res], st.resource_freqdeck[i])
+        st.player_state[f"{player_key(st, claimants[0])}_{res}_IN_HAND"] += give
+        st.resource_freqdeck[i] -= give
+    st.playable_actions = generate_playable_actions(st)
 
 
 def fix_free_roads(st, color):
@@ -214,7 +239,12 @@ def apply(game, act):
     builds = act.action_type in (ActionType.BUILD_ROAD, ActionType.BUILD_SETTLEMENT)
     if builds:
         prev, before = get_longest_road_color(st), road_lengths(st)
-    done = game.execute(resolve(game, act), validate_action=False)
+    act = resolve(game, act)
+    if act.action_type == ActionType.ROLL:
+        owed, bank_before = owed_by_roll(st, sum(act.value)), list(st.resource_freqdeck)
+    done = game.execute(act, validate_action=False)
+    if act.action_type == ActionType.ROLL:
+        pay_lone_claimant(st, owed, bank_before)
     if free or act.action_type == ActionType.PLAY_ROAD_BUILDING:
         fix_free_roads(st, act.color)
     if builds:

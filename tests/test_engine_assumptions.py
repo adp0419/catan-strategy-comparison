@@ -284,3 +284,15 @@ def test_raw_engine_lets_red_numbers_touch():
 
     touching = sum(red_numbers_touch(new_game(seed).state.board.map) for seed in range(1, 51))
     assert touching > 0
+
+
+def test_short_bank_pays_nobody_even_lone_claimant():
+    from tests.helpers import lone_claim_setup
+
+    game = new_game()
+    p1, tile, idx = lone_claim_setup(game)
+    before = player_num_resource_cards(game.state, p1, tile.resource)
+    dice = (tile.number // 2, tile.number - tile.number // 2)
+    roll(game, dice)
+    assert player_num_resource_cards(game.state, p1, tile.resource) == before
+    assert game.state.resource_freqdeck[idx] == 1

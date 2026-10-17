@@ -46,10 +46,10 @@ def expected_from(yields):
     return prod
 
 
-def variance_from(yields):
+def variance_from(yields, resource=None):
     mean = sq = 0.0
     for number, cards in yields.items():
-        total = sum(cards.values())
+        total = cards.get(resource, 0) if resource else sum(cards.values())
         mean += roll_prob(number) * total
         sq += roll_prob(number) * total * total
     return sq - mean * mean
@@ -68,11 +68,11 @@ def node_production(board, node, robber_hex=None, mult=SETTLEMENT_MULT):
     return expected_from(number_yields(board, {node: mult}, robber_hex))
 
 
-def production_variance(state, player, robber=True, extra=None):
+def production_variance(state, player, robber=True, extra=None, resource=None):
     held = holdings(state, player)
     for node, mult in (extra or {}).items():
         held[node] = max(held.get(node, 0), mult)
-    return variance_from(number_yields(state["board"], held, robber_of(state, robber)))
+    return variance_from(number_yields(state["board"], held, robber_of(state, robber)), resource)
 
 
 def resource_diversity(state, player):
@@ -87,3 +87,12 @@ def resource_roll_prob(state, player, resource, robber=True):
 def prob_of_resource_within(state, player, resource, rolls, robber=True):
     p = resource_roll_prob(state, player, resource, robber)
     return 1 - (1 - p) ** rolls
+
+
+def robber_adjusted_production(state, player, downtime):
+    prod = {r: 0.0 for r in RESOURCES}
+    board = state["board"]
+    for node, mult in holdings(state, player).items():
+        for h in producing_hexes(board, node):
+            prod[h["resource"]] += mult * roll_prob(h["number"]) * (1 - downtime.get(pips(h["number"]), 0.0))
+    return prod

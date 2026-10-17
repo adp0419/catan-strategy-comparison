@@ -308,3 +308,15 @@ def test_bonus_and_vp_invariants_across_random_games():
                 exp += 2 * ps[f"{key}_HAS_ROAD"] + 2 * ps[f"{key}_HAS_ARMY"]
                 assert ps[f"{key}_ACTUAL_VICTORY_POINTS"] == exp
                 assert extract_state(game, c)["me"]["road_length"] == lengths[c]
+
+
+def test_short_bank_pays_lone_claimant_the_remainder():
+    from tests.helpers import lone_claim_setup
+
+    game = raw_game()
+    p1, tile, idx = lone_claim_setup(game)
+    before = player_num_resource_cards(game.state, p1, tile.resource)
+    dice = (tile.number // 2, tile.number - tile.number // 2)
+    apply(game, Action(p1, ActionType.ROLL, dice))
+    assert player_num_resource_cards(game.state, p1, tile.resource) == before + 1
+    assert game.state.resource_freqdeck[idx] == 0

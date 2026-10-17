@@ -142,3 +142,26 @@ def blank_state(phase="main", **fields):
         side, field = key.split("_", 1)
         state[side][field] = val
     return state
+
+
+def lone_claim_setup(game):
+    from catanatron.models.enums import CITY
+
+    play_setup(game)
+    st = game.state
+    p1, p2 = st.colors
+    for coord, tile in st.board.map.land_tiles.items():
+        if tile.resource is None or coord == st.board.robber_coordinate:
+            continue
+        owners = {st.board.buildings[n][0] for n in tile.nodes.values() if n in st.board.buildings}
+        if owners == {p1}:
+            node = next(n for n in tile.nodes.values() if n in st.board.buildings)
+            st.board.buildings[node] = (p1, CITY)
+            others = [t for t in st.board.map.land_tiles.values() if t.number == tile.number and t is not tile]
+            if any(st.board.buildings.get(n, (None,))[0] for t in others for n in t.nodes.values()):
+                continue
+            to_roll_of(game, p1)
+            idx = RESOURCES.index(tile.resource)
+            st.resource_freqdeck[idx] = 1
+            return p1, tile, idx
+    raise AssertionError("no lone claimant tile")

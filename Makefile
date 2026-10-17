@@ -1,15 +1,17 @@
 PY := .venv/bin/python
 GUI := ../catanatron-gui
 SEED ?= 1
-GAMES ?= 100
 
-.PHONY: test smoke board gui gui-stop
+.PHONY: test smoke validate board gui gui-stop
 
 test:
 	$(PY) -m pytest -q
 
 smoke:
-	$(PY) -m src.sim.smoke $(GAMES)
+	$(PY) -m src.sim.smoke $(or $(GAMES),100)
+
+validate:
+	$(PY) -m src.sim.validate_production $(or $(GAMES),1000)
 
 board:
 	$(PY) -m src.analysis.board_plot --seed $(SEED) $(if $(MOVES),--moves $(MOVES)) --out data/boards/board.png

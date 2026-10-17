@@ -35,12 +35,11 @@ Probability of a number on one roll is `PIPS[n] / 36`.
 - `prob_of_resource_within(state, player, resource, turns) -> float`
 
 `src/common/board.py`
-- `adjacent_hexes(board, node)`
-- `adjacent_nodes(board, node)`
-- `distance_rule_ok(board, node)` the no adjacent settlement rule
-- `buildable_nodes(state, player)`
-- `buildable_edges(state, player)`
-- `road_distance(state, player, node)` minimum roads needed to reach a node
+- `adjacent_hexes(board, node)`, `adjacent_nodes(board, node)`
+- `node_ports(board) -> dict[node, port]` port resource or `"3:1"` for every port node
+- `distance_rule_ok(state, node)` the no adjacent settlement rule (takes `state`, since buildings live in `me` / `opp`, not `board`)
+- `buildable_nodes(state, player)` and `buildable_edges(state, player)`, where `player` is `"me"` or `"opp"`. Placement rules apply when `state["phase"] == "placement"`. Both are checked against the engine's own legal moves in `tests/test_board.py`
+- `road_distances(state, player) -> dict[node, int]` and `road_distance(state, player, node)` minimum new roads needed to reach a node. Own roads are free, opponent roads and buildings block, unreachable is `inf`
 - `port_access(state, player) -> dict[resource, ratio]` effective trade ratios including 4:1 default
 
 `src/common/economy.py`

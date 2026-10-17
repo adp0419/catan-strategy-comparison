@@ -51,10 +51,11 @@ Planned, not built: robber-adjusted expected production (see `04-catan-strategy-
 - `port_access(state, player) -> dict[resource, ratio]` effective trade ratios including 4:1 default
 
 `src/common/economy.py`
-- `COSTS` for road, settlement, city, dev card
-- `can_afford(hand, item)`
-- `turns_to_afford(state, player, item) -> float` expected turns given current production and port ratios
-- `effective_hand_value(hand, ratios)` hand value normalized through best available trade ratios
+- `COSTS` for `road`, `settlement`, `city`, `dev_card`. Any function taking an `item` also accepts a raw cost dict
+- `can_afford(hand, item)`, `missing(hand, item)`, `surplus(hand, item)`
+- `can_afford_with_trades(hand, item, ratios)` and `trade_plan(hand, item, ratios) -> list[(give, ratio, get)] | None` the bank and port trades that complete a purchase right now, cheapest ratio first, never spending a card the purchase itself needs. This is what Agent A's "trade only to complete a purchase this turn" rule uses
+- `effective_hand_value(hand, ratios)` hand value in free choice cards, each card counted as `1 / ratio` of its resource
+- `rolls_to_afford(hand, production, item, ratios)` and `turns_to_afford(state, player, item)` expected **rolls** until the item is affordable, counting trades. Fluid approximation: production accrues at its expected rate, trades happen in whole ratio lots. Returns `inf` when unreachable within 500 rolls. `turns_to_afford` only works for `"me"`, since the opponent's hand is hidden; Agent B can call `rolls_to_afford` with an inferred hand
 
 `src/common/scoring.py`
 - `victory_points(state, player)` including hidden VP cards for self only

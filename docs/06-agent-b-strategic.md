@@ -38,6 +38,51 @@ Archetypes to implement: `Expansion`, `OreWheatSheep`, `LongestRoad`, `CitiesAnd
 - **Re-evaluation checkpoints:** after initial placement completes, every N turns (start with N=5), and on trigger events (losing a target node, robber parked on a key tile for 3 plus turns, opponent reaching 7 VP).
 - **Switching cost:** switching plans wastes tempo, so require the new archetype to beat the current one by a margin before switching. Log every switch; plan thrash is a bug signal.
 
+### Failure detection
+
+A plan rarely dies cleanly. It degrades, and the agent needs to notice before it has spent ten turns on something that stopped working. `is_dead` is the hard stop; these are the soft signals that should drive re-evaluation earlier.
+
+Each archetype declares the conditions it depends on, and the Planner monitors them:
+
+- **Target node lost.** The opponent settled a node the plan was routed toward. Severity scales with whether an alternative node of similar value is still reachable.
+- **Production choked.** The robber has sat on a key hex for several consecutive turns, or the archetype's core resource is arriving well below its analytic expectation. Compare realized production against `expected_production` over a rolling window; a sustained shortfall means the plan's assumptions no longer hold, whether from robbing or ordinary variance.
+- **Milestone stalled.** The agent has not advanced `next_milestone` in N turns. This is the most general signal and catches failures the specific checks miss.
+- **Tempo lost.** The opponent's estimated turns-to-10 is now shorter than the agent's. A plan that is on track but slower than the opponent's plan is still a losing plan.
+- **Resource dead end.** The plan requires a resource the agent neither produces nor can obtain through an accessible port. Without player trading this is terminal rather than inconvenient, which is why it deserves its own check in 1v1.
+
+Each signal contributes to a degradation score rather than firing independently. One bad signal is noise; a rising score across several is a dying plan. Re-evaluate when the score crosses a threshold, not on every twitch.
+
+### Pivoting
+
+The naive version re-runs `viability` across all archetypes and takes the winner. That is wrong, because viability measures fit to the board and ignores what the agent has already built. A pivot has to be evaluated from the current position, not from scratch.
+
+**Pivot cost.** Score each candidate archetype by its viability minus the cost of getting there from here: assets that become dead weight (roads that lead nowhere under the new plan, nodes placed for production the new plan does not use), plus the expected turns to reach the new plan's first milestone. An archetype that scores highest in the abstract can easily be the worst pivot target.
+
+**Prefer adjacent pivots.** Archetypes that share infrastructure are cheap to move between; ones that do not are close to starting over.
+
+- `Expansion` → `LongestRoad` is nearly free. The roads are already built and already connected; the agent just starts valuing length directly.
+- `Expansion` → `CitiesAndRoads` is free. It is a change of emphasis on the same assets.
+- `OreWheatSheep` → `DevRush` is cheap. Same production profile, different sink.
+- `Expansion` → `OreWheatSheep` is expensive and usually wrong. It needs ore and wheat production the agent did not place for and cannot trade for.
+- Anything → `PortPlay` requires a specific port node, so it is only available as a pivot if that node is still reachable.
+
+Encode this as a pivot cost matrix the Planner consults, rather than letting it rediscover the structure every time.
+
+**Partial pivots.** Full archetype switches are not the only option and often not the best one. Usually the right move is to keep the plan and change the win condition: an `OreWheatSheep` agent whose ore is permanently robbed does not need to become an expansion agent, it needs to stop targeting cities and start targeting largest army with what it still produces. Let archetypes expose more than one route to 10 VP and switch route before switching archetype.
+
+**Salvage first.** Before abandoning a plan, check whether a single action repairs it: a Knight to clear a parked robber, Year of Plenty to break a resource dead end, one road to reach a replacement node. A plan that is one action from healthy should be repaired, not replaced. This check runs before pivot evaluation and will usually be the correct answer early in the game.
+
+**Terminal pivots.** Late in the game, with the opponent at 8 or more VP, pivot evaluation stops being about plan quality and becomes a search for the fastest remaining path to 10, accepting a worse position in exchange for speed. The Reactor owns this case; the Planner should hand off rather than keep optimizing.
+
+### Measuring whether pivoting helps
+
+Pivoting is a capability, so it needs its own attribution. `AgentB_noReplan` (archetype fixed at placement) is already in the ablation set and isolates the whole mechanism. Add two logged diagnostics:
+
+- **Pivot outcome rate.** Win rate in games where a pivot occurred versus games where the initial plan held. If pivoting agents lose more, the agent is either pivoting too eagerly or pivoting to the wrong targets, and the degradation threshold or the cost matrix is where to look.
+- **Pivot timing.** Turn number of each pivot. Early pivots are usually cheap and correct; late pivots usually mean the failure was detected too slowly, which points back at the detection signals rather than at pivoting itself.
+
+Hold the MVP position: ship the fixed-archetype Planner first, confirm the agent plays sensibly, then layer detection and pivoting on top. Building pivot logic before the base planner works makes it impossible to tell which layer is responsible for bad play.
+
 ### Viability scoring
 
 Each archetype computes viability from shared primitives only. Examples:

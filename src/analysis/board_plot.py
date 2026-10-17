@@ -12,7 +12,7 @@ from catanatron.models.enums import CITY
 from catanatron.models.map import PORT_DIRECTION_TO_NODEREFS, LandTile, NodeRef, Port
 from catanatron.state_functions import get_actual_victory_points, get_longest_road_color, get_largest_army
 
-from src.agents.baselines import RandomAgent
+from src.agents.registry import make_agent
 from src.common.engine import SEATS, apply, extract_state, legal_actions, new_game
 
 SIZE = 1.0
@@ -123,9 +123,9 @@ def render(game, path, title=""):
     return path
 
 
-def play_until(seed, moves=None, swap=False):
+def play_until(seed, moves=None, swap=False, a="random", b="random"):
     game = new_game(seed, SEATS[::-1] if swap else SEATS)
-    agents = {c: RandomAgent(seed * 7 + i) for i, c in enumerate(SEATS)}
+    agents = {SEATS[0]: make_agent(a, seed * 2), SEATS[1]: make_agent(b, seed * 2 + 1)}
     count = 0
     while game.winning_color() is None and game.state.num_turns < 1000:
         if moves is not None and count >= moves:
@@ -141,12 +141,14 @@ def main():
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--moves", type=int, default=None)
     parser.add_argument("--out", default=None)
+    parser.add_argument("--a", default="random")
+    parser.add_argument("--b", default="random")
     args = parser.parse_args()
-    game = play_until(args.seed, args.moves)
+    game = play_until(args.seed, args.moves, a=args.a, b=args.b)
     stage = "empty board" if args.moves == 0 else (f"after {args.moves} moves" if args.moves else "final position")
     out = args.out or f"data/boards/seed{args.seed}_{'final' if args.moves is None else args.moves}.png"
     winner = game.winning_color()
-    title = f"Seed {args.seed}, random vs random, {stage}, turn {game.state.num_turns}"
+    title = f"Seed {args.seed}, RED {args.a} vs BLUE {args.b}, {stage}, turn {game.state.num_turns}"
     if args.moves is None and winner:
         title += f", winner {winner.value}"
     print(render(game, out, title))

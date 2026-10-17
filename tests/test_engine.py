@@ -12,13 +12,16 @@ from catanatron.state_functions import (
 from src.agents.baselines import RandomAgent
 from src.common.engine import (
     DEV_PLAYS,
+    apply,
     SEATS,
     board_hash,
     extract_state,
     legal_actions,
     new_game,
+    next_road_holder,
     play_game,
     red_numbers_touch,
+    road_lengths,
     step,
 )
 from tests.helpers import build_cut_scenario, cut_road, first_of, play_setup, refresh, set_hand, start_turn_of
@@ -254,3 +257,54 @@ def test_red_numbers_never_touch():
         assert not red_numbers_touch(game.state.board.map)
         tiles = game.state.board.map.land_tiles.values()
         assert sorted(t.number for t in tiles if t.number) == sorted([2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12])
+
+
+@pytest.mark.parametrize(
+    "prev,before,after,expected",
+    [
+        (None, {"A": 4, "B": 3}, {"A": 5, "B": 3}, "A"),
+        (None, {"A": 4, "B": 3}, {"A": 4, "B": 3}, None),
+        ("A", {"A": 5, "B": 4}, {"A": 5, "B": 5}, "A"),
+        ("A", {"A": 5, "B": 5}, {"A": 5, "B": 6}, "B"),
+        ("A", {"A": 6, "B": 5}, {"A": 4, "B": 5}, "B"),
+        ("A", {"A": 7, "B": 6}, {"A": 6, "B": 6}, None),
+        ("A", {"A": 6, "B": 4}, {"A": 3, "B": 4}, None),
+        (None, {"A": 6, "B": 6}, {"A": 7, "B": 6}, "A"),
+    ],
+)
+def test_longest_road_award_rules(prev, before, after, expected):
+    assert next_road_holder(prev, before, after) == expected
+
+
+def test_road_into_enemy_settlement_counts():
+    game = new_game(9)
+    st = game.state
+    p1, p2 = st.colors
+    st.board.buildings[4] = (p2, "SETTLEMENT")
+    for e in [(15, 17), (4, 15)]:
+        st.board.roads[e] = p1
+        st.board.roads[e[::-1]] = p1
+    assert road_lengths(st)[p1] == 2
+
+
+def test_bonus_and_vp_invariants_across_random_games():
+    for seed in range(1, 31):
+        game = new_game(seed, SEATS if seed % 2 else SEATS[::-1])
+        agents = {c: RandomAgent(seed * 11 + i) for i, c in enumerate(SEATS)}
+        while game.winning_color() is None and game.state.num_turns < 600:
+            color = game.state.current_color()
+            apply(game, agents[color].decide(extract_state(game, color), legal_actions(game)))
+            st = game.state
+            lengths = road_lengths(st)
+            holder = get_longest_road_color(st)
+            if holder is not None:
+                assert lengths[holder] >= 5
+                assert lengths[holder] >= max(lengths.values())
+            for c in SEATS:
+                key = player_key(st, c)
+                ps = st.player_state
+                blds = st.buildings_by_color[c]
+                exp = len(blds["SETTLEMENT"]) + 2 * len(blds["CITY"]) + ps[f"{key}_VICTORY_POINT_IN_HAND"]
+                exp += 2 * ps[f"{key}_HAS_ROAD"] + 2 * ps[f"{key}_HAS_ARMY"]
+                assert ps[f"{key}_ACTUAL_VICTORY_POINTS"] == exp
+                assert extract_state(game, c)["me"]["road_length"] == lengths[c]

@@ -58,14 +58,17 @@ Planned, not built: robber-adjusted expected production (see `04-catan-strategy-
 - `rolls_to_afford(hand, production, item, ratios)` and `turns_to_afford(state, player, item)` expected **rolls** until the item is affordable, counting trades. Fluid approximation: production accrues at its expected rate, trades happen in whole ratio lots. Returns `inf` when unreachable within 500 rolls. `turns_to_afford` only works for `"me"`, since the opponent's hand is hidden; Agent B can call `rolls_to_afford` with an inferred hand
 
 `src/common/scoring.py`
-- `victory_points(state, player)` including hidden VP cards for self only
-- `visible_victory_points(state, player)` what the opponent can see, used for opponent modeling
-- `longest_road_length(state, player)`
+- `victory_points(state, player)` actual VP including hidden VP cards for `"me"`, visible VP for `"opp"` since theirs are hidden
+- `visible_victory_points(state, player)` what the other side can see, used for opponent modeling
+- `trail_length(edges, blocked)` and `longest_road_length(state, player, extra=())` longest continuous road; an opponent building can end a road but not sit in the middle of it. `extra` scores hypothetical roads. The engine wrapper uses the same function to award longest road
 - `army_size(state, player)`
+- `LONGEST_ROAD_MIN`, `LARGEST_ARMY_MIN`, `BONUS_VP`
 
 `src/common/robber.py`
-- `robber_damage(state, target, hex)` expected cards per turn denied by blocking a hex
-- `steal_ev(state, target)` expected value of a steal given the target's hand size
+- `hex_yield(state, player, hex)` and `robber_damage(state, target, hex)` cards per roll the target loses while the robber blocks that hex
+- `can_steal(state, target, hex)`, `steal_ev(state, target, hex=None)` a steal takes exactly one card, so the value is 1 card when the target has a building on the hex and a nonempty hand, else 0
+- `steal_odds(hand)` per resource chance of the stolen card, for a known or inferred hand
+- `discard_loss(cards)` and `expected_discard_loss(cards)` cards lost to a 7 per roll at a given hand size, so both agents can price hoarding
 
 ## Project state dict
 

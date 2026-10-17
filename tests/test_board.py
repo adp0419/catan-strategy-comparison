@@ -16,18 +16,7 @@ from src.common.board import (
     road_distance,
 )
 from src.common.engine import SEATS, apply, extract_state, legal_actions, new_game
-
-
-def blank_state(phase="main", **fields):
-    game = new_game(1)
-    state = extract_state(game, game.state.colors[0])
-    state["phase"] = phase
-    for side in ("me", "opp"):
-        state[side].update({"settlements": [], "cities": [], "roads": [], "ports": []})
-    for key, val in fields.items():
-        side, field = key.split("_", 1)
-        state[side][field] = val
-    return state
+from tests.helpers import blank_state
 
 
 def test_adjacency_on_center_hex():

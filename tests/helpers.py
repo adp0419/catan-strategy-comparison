@@ -128,3 +128,17 @@ def cut_road(game, p2, do):
     do(game, Action(p2, ActionType.BUILD_ROAD, (CUT_LINK, CUT_NODE)))
     set_hand(game, p2, WOOD=1, BRICK=1, SHEEP=1, WHEAT=1)
     do(game, Action(p2, ActionType.BUILD_SETTLEMENT, CUT_NODE))
+
+
+def blank_state(phase="main", **fields):
+    from src.common.engine import extract_state, new_game as wrapped_game
+
+    game = wrapped_game(1)
+    state = extract_state(game, game.state.colors[0])
+    state["phase"] = phase
+    for side in ("me", "opp"):
+        state[side].update({"settlements": [], "cities": [], "roads": [], "ports": []})
+    for key, val in fields.items():
+        side, field = key.split("_", 1)
+        state[side][field] = val
+    return state

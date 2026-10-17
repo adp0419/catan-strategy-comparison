@@ -1,7 +1,7 @@
 import hashlib
 import random
 import weakref
-from collections import Counter
+from collections import Counter, defaultdict
 
 from catanatron.game import TURNS_LIMIT, Game
 from catanatron.models.actions import generate_playable_actions
@@ -23,7 +23,6 @@ from catanatron.state_functions import (
     get_dev_cards_in_hand,
     get_largest_army,
     get_longest_road_color,
-    get_longest_road_length,
     get_played_dev_cards,
     get_visible_victory_points,
     player_can_play_dev,
@@ -32,6 +31,9 @@ from catanatron.state_functions import (
     player_num_dev_cards,
     player_num_resource_cards,
 )
+
+from src.common.board import edge_key
+from src.common.scoring import LONGEST_ROAD_MIN, trail_length
 
 SEATS = (Color.RED, Color.BLUE)
 VPS_TO_WIN = 10
@@ -173,27 +175,50 @@ def move_bonus(st, flag, old, new):
         st.player_state[f"{key}_ACTUAL_VICTORY_POINTS"] += delta
 
 
-def fix_longest_road(st):
+def road_lengths(st):
     board = st.board
-    best = max(board.road_lengths.values())
-    leaders = [c for c, n in board.road_lengths.items() if n == best]
-    new = leaders[0] if best >= 5 and len(leaders) == 1 else None
-    board.road_color, board.road_length = new, best
-    old = get_longest_road_color(st)
-    if old != new:
-        move_bonus(st, "HAS_ROAD", old, new)
+    lengths = {}
+    for color in st.colors:
+        edges = {edge_key(*e) for e, c in board.roads.items() if c == color}
+        blocked = {n for n, (c, _) in board.buildings.items() if c != color}
+        lengths[color] = trail_length(edges, blocked)
+    return lengths
+
+
+def next_road_holder(prev, before, after):
+    best = max(after.values())
+    leaders = [c for c, n in after.items() if n == best]
+    unique = leaders[0] if best >= LONGEST_ROAD_MIN and len(leaders) == 1 else None
+    if prev is None or after[prev] < before[prev]:
+        return unique
+    return prev if after[prev] == best else unique
+
+
+def update_longest_road(st, prev, before):
+    after = road_lengths(st)
+    new = next_road_holder(prev, before, after)
+    board = st.board
+    board.road_lengths = defaultdict(int, after)
+    board.road_color = new
+    board.road_length = after[new] if new else max(after.values())
+    for color in st.colors:
+        st.player_state[f"{player_key(st, color)}_LONGEST_ROAD_LENGTH"] = after[color]
+    cur = get_longest_road_color(st)
+    if cur != new:
+        move_bonus(st, "HAS_ROAD", cur, new)
 
 
 def apply(game, act):
     st = game.state
     free = st.is_road_building
-    cut_check = act.action_type == ActionType.BUILD_SETTLEMENT and not st.is_initial_build_phase
-    lengths = dict(st.board.road_lengths)
+    builds = act.action_type in (ActionType.BUILD_ROAD, ActionType.BUILD_SETTLEMENT)
+    if builds:
+        prev, before = get_longest_road_color(st), road_lengths(st)
     done = game.execute(resolve(game, act), validate_action=False)
     if free or act.action_type == ActionType.PLAY_ROAD_BUILDING:
         fix_free_roads(st, act.color)
-    if cut_check and dict(st.board.road_lengths) != lengths:
-        fix_longest_road(st)
+    if builds:
+        update_longest_road(st, prev, before)
     return done
 
 
@@ -248,7 +273,7 @@ def public_view(st, color):
         "cities": sorted(blds[CITY]),
         "roads": sorted(tuple(sorted(e)) for e in blds[ROAD]),
         "knights_played": get_played_dev_cards(st, color, "KNIGHT"),
-        "road_length": get_longest_road_length(st, color),
+        "road_length": st.board.road_lengths[color],
         "ports": player_ports(st, color),
     }
 

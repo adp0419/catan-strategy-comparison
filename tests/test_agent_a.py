@@ -97,3 +97,13 @@ def test_agent_keeps_no_state_between_decisions():
     play_game(agent, RandomAgent(1), seed=3)
     assert vars(agent) == before
     assert set(vars(agent)) == {"w"}
+
+
+def test_weights_are_frozen():
+    import json
+    from pathlib import Path
+
+    from src.agents.agent_a import WEIGHTS
+
+    frozen = json.loads(Path("results/agent_a_weights.json").read_text())["weights"]
+    assert WEIGHTS == frozen, "Agent A is frozen; changing its weights invalidates the experiment"

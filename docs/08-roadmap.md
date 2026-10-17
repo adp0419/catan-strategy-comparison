@@ -33,7 +33,7 @@ Branch `phase-2-agent-a`
 - Tune Agent A weights against the baselines and the engine's built in bot only
 - Freeze and record the weights
 
-**Done when:** Agent A beats random above 95 percent and is competitive with the engine's built in bot. If it is not, Agent A is too weak to be a meaningful control.
+**Done when:** Agent A beats random above 95 percent and clearly beats Weighted Random and VictoryPoint. The original bar, competitive with the engine's built in bot, was dropped: the base package ships no strong bot, and catanatron's AlphaBeta bots run on a different engine version. **Met:** 1,499 of 1,500 games against the three baselines on reserved seeds; weights frozen in `results/agent_a_weights.json`.
 
 ## Phase 3: Simulation infrastructure
 

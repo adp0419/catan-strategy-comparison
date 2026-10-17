@@ -117,3 +117,14 @@ If any of these creep in, Agent A stops being the control and the experiment is 
 **Additions beyond the original spec.** Robber placement subtracts damage to self, so A never parks the robber on its own hex. Number collision is measured as the covariance between existing production and the new node (`probability.number_collision`), which is positive exactly when they share numbers. Both are shared numeric primitives, not planning.
 
 **Untuned baseline result.** With the starting weights, A won 100 of 100 against Random, Weighted Random, and VictoryPoint (seat swapped every other game), with a median game of 68 turns. In self play over 100 games the winner's VP came from settlements 3.0, cities 2.8, VP cards 1.7, largest army 1.4, longest road 1.2. A buys about 13 dev cards per game and builds under 2 cities, which tuning should look at.
+
+
+## Tuning and freeze (Phase 2 result)
+
+**Method.** Coordinate ascent by self play (`src/sim/tune.py`). Each trial doubles or halves one weight and plays the changed agent against the current one on 600 fresh boards from the tuning range (seeds 1 to 900,000), both seat orders per board. Most boards split 1 to 1 because two nearly identical deterministic agents mirror each other, so a trial is judged only on boards one side won in both seats: a change is kept when it wins more such boards and the Wilson lower bound of its share is above 0.5. Every trial is in `results/tuning_log.csv`.
+
+**Result.** One full sweep of 40 trials, 24,000 games, kept no change, so the starting weights are a local optimum under doubling and halving and were frozen as is. Changes to `pips`, `diversity`, `dev`, `trade_cost`, and `collision` moved dozens of boards, always in the incumbent's favor. Changes to `city`, `steal`, `knight_relief`, `road_building`, `plenty`, and `monopoly` changed no decisions at all at these values, because another rule always outranks them where they would apply.
+
+**Frozen weights** are recorded in `results/agent_a_weights.json`. `tests/test_agent_a.py::test_weights_are_frozen` fails if `WEIGHTS` in `agent_a.py` ever diverges from that file. Agent B did not exist when they were frozen.
+
+**Check on reserved seeds** (900,001 onward, never used for tuning), 500 games each with seats swapped: 500 / 500 against Random, 499 / 500 against Weighted Random, 500 / 500 against VictoryPoint.

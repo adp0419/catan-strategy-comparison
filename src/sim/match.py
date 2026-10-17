@@ -34,6 +34,20 @@ def run_match(a_spec, b_spec, pairs, start=1, workers=None):
     return logs
 
 
+def pair_results(logs):
+    sweeps_a = sweeps_b = splits = 0
+    for first, second in zip(logs[::2], logs[1::2]):
+        wins = (first["winner"] == "a") + (second["winner"] == "a")
+        losses = (first["winner"] == "b") + (second["winner"] == "b")
+        if wins == 2:
+            sweeps_a += 1
+        elif losses == 2:
+            sweeps_b += 1
+        else:
+            splits += 1
+    return sweeps_a, sweeps_b, splits
+
+
 def summarize(logs):
     done = [g for g in logs if g["winner"]]
     wins = sum(g["winner"] == "a" for g in done)

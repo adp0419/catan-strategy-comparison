@@ -2,7 +2,7 @@ import pytest
 
 from src.agents.registry import make_agent
 from src.analysis.stats import wilson
-from src.sim.match import play_pair, run_match, summarize
+from src.sim.match import pair_results, play_pair, run_match, summarize
 
 
 def test_wilson_known_values():
@@ -38,3 +38,8 @@ def test_summary():
     assert res["games"] == 10
     assert res["a_wins"] == 10
     assert res["a_ci"][0] > 0.6
+
+
+def test_pair_results_counts_sweeps_and_splits():
+    logs = [{"winner": "a"}, {"winner": "a"}, {"winner": "b"}, {"winner": "b"}, {"winner": "a"}, {"winner": "b"}, {"winner": None}, {"winner": "a"}]
+    assert pair_results(logs) == (1, 1, 2)

@@ -2,7 +2,7 @@ import random
 
 from catanatron.models.enums import ActionType
 
-from src.common.scoring import BONUS_VP, LARGEST_ARMY_MIN, LONGEST_ROAD_MIN, army_size, longest_road_length
+from src.common.scoring import BONUS_VP, takes_largest_army, takes_longest_road
 
 WEIGHTS = {
     ActionType.BUILD_CITY: 10000,
@@ -30,20 +30,6 @@ class WeightedRandomAgent:
     def decide(self, state, actions):
         weights = [WEIGHTS.get(a.action_type, 1) for a in actions]
         return self.rng.choices(actions, weights=weights)[0]
-
-
-def takes_longest_road(state, edge):
-    if state["longest_road_holder"] == "me":
-        return False
-    length = longest_road_length(state, "me", extra=[edge])
-    return length >= LONGEST_ROAD_MIN and length > state["opp"]["road_length"]
-
-
-def takes_largest_army(state):
-    if state["largest_army_holder"] == "me":
-        return False
-    knights = army_size(state, "me") + 1
-    return knights >= LARGEST_ARMY_MIN and knights > army_size(state, "opp")
 
 
 def vp_gain(state, act):

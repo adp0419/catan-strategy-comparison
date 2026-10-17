@@ -5,6 +5,7 @@ from src.common.probability import (
     expected_production,
     node_pips,
     node_production,
+    number_collision,
     pips,
     prob_of_resource_within,
     production_variance,
@@ -132,3 +133,11 @@ def test_robber_adjusted_production():
     adj = robber_adjusted_production(state, "me", {5: 0.2})
     assert adj["WHEAT"] == pytest.approx(plain["WHEAT"] * 0.8)
     assert adj["ORE"] == pytest.approx(plain["ORE"] * 0.8)
+
+
+def test_number_collision_sign():
+    same = fixture(me_settlements=[2])
+    assert number_collision(same, "me", 4) > 0
+    assert number_collision(same, "me", 3) < 0
+    p = 5 / 36
+    assert number_collision(same, "me", 4) == pytest.approx(p - p * p)

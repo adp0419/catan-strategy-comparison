@@ -47,3 +47,18 @@ def longest_road_length(state, player, extra=()):
 
 def army_size(state, player):
     return state[player]["knights_played"]
+
+
+def takes_longest_road(state, edge, player="me"):
+    holder = "me" if player == "me" else "opp"
+    if state["longest_road_holder"] == holder:
+        return False
+    length = longest_road_length(state, player, extra=[edge])
+    return length >= LONGEST_ROAD_MIN and length > state[other(player)]["road_length"]
+
+
+def takes_largest_army(state, player="me"):
+    if state["largest_army_holder"] == player:
+        return False
+    knights = army_size(state, player) + 1
+    return knights >= LARGEST_ARMY_MIN and knights > army_size(state, other(player))

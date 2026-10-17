@@ -90,3 +90,30 @@ These are the design boundary. Agent A must not have:
 - Any awareness of the opponent's victory point trajectory
 
 If any of these creep in, Agent A stops being the control and the experiment is invalid.
+
+
+## Implementation (`src/agents/agent_a.py`)
+
+`GreedyAgent(weights=None)` scores every legal action and returns the highest. Ties go to the first action in `legal_actions` order, which is sorted, so play is deterministic. The agent stores only its weight dict; anything computed during a decision lives in a per call cache and is discarded, which `tests/test_agent_a.py` enforces.
+
+**One currency.** Every score is in pips, where 36 pips is one card per roll. Production gains are converted with `PIPS_PER_CARD`; a VP is worth `vp` pips. This keeps the weights comparable across action types.
+
+**How each action is scored**, all from `common/`:
+
+| Action | Score |
+|---|---|
+| Settlement | pips of the node, plus `diversity` per new resource, plus a port bonus (`port_generic` for 3:1, `port_match` times matching production for 2:1), minus `collision` times the number collision covariance; plus `vp` in the main phase |
+| City | `city` times the node's production gain, plus `vp` |
+| Road | `road_reach` times the improvement in best reachable settlement value (node value divided by 1 + roads needed, within `reach_depth`); plus `2 * vp` if it takes longest road, or `road_progress` if it extends a road that is at least 3 and close to the opponent's |
+| Dev card | flat `dev` |
+| Bank or port trade | only nonzero when the trade makes a not yet affordable item affordable this turn without selling a card that item needs; then the item's value minus `trade_cost` times the drop in `effective_hand_value` |
+| Robber | damage to the opponent, minus damage to self, plus `steal` if the move steals |
+| Knight | `knight_relief` times the robber's damage to self, plus `2 * vp` if it takes largest army |
+| Road Building | `road_building` times the best settlement reachable within 2 roads |
+| Year of Plenty | `plenty` times the best item it makes affordable |
+| Monopoly | `monopoly` times the estimated opponent holding (hand size times their production share), only above `monopoly_min` |
+| Roll, end turn, discard | `pass`, a small positive constant, so zero value actions never beat passing |
+
+**Additions beyond the original spec.** Robber placement subtracts damage to self, so A never parks the robber on its own hex. Number collision is measured as the covariance between existing production and the new node (`probability.number_collision`), which is positive exactly when they share numbers. Both are shared numeric primitives, not planning.
+
+**Untuned baseline result.** With the starting weights, A won 100 of 100 against Random, Weighted Random, and VictoryPoint (seat swapped every other game), with a median game of 68 turns. In self play over 100 games the winner's VP came from settlements 3.0, cities 2.8, VP cards 1.7, largest army 1.4, longest road 1.2. A buys about 13 dev cards per game and builds under 2 cities, which tuning should look at.

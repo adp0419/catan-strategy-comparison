@@ -277,11 +277,12 @@ def board_view(catan_map):
     hexes = [
         {
             "id": t.id,
+            "coord": coord,
             "resource": t.resource or "DESERT",
             "number": t.number,
             "nodes": sorted(t.nodes.values()),
         }
-        for t in sorted(catan_map.land_tiles.values(), key=lambda t: t.id)
+        for coord, t in sorted(catan_map.land_tiles.items(), key=lambda kv: kv[1].id)
     ]
     nodes = [
         {

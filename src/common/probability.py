@@ -96,3 +96,13 @@ def robber_adjusted_production(state, player, downtime):
         for h in producing_hexes(board, node):
             prod[h["resource"]] += mult * roll_prob(h["number"]) * (1 - downtime.get(pips(h["number"]), 0.0))
     return prod
+
+
+def number_collision(state, player, node, mult=SETTLEMENT_MULT):
+    board = state["board"]
+    held = holdings(state, player)
+    both = dict(held)
+    both[node] = max(both.get(node, 0), mult)
+    joint = variance_from(number_yields(board, both))
+    alone = variance_from(number_yields(board, held)) + variance_from(number_yields(board, {node: mult}))
+    return (joint - alone) / 2

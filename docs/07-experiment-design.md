@@ -123,6 +123,19 @@ Ratings are a Bradley-Terry maximum likelihood fit, reported on the Elo scale (4
 
 **Read perfect records as lower bounds.** When an agent wins every game of a matchup, its rating gap is set by the prior, not by data, and the bootstrap error is too small because every resample is also a sweep. Example from a 150 pair check run: greedy went 900 of 900 and rated +1181, victory_point +98, weighted_random +94. Ratings are informative for competitive matchups such as A vs B.
 
+### Runner sanity checks (`src/sim/sanity.py`, `make sanity`)
+
+Run before every main experiment and after any change to the engine, runner, or agents. Each check can fail, and `tests/test_sanity.py` proves the mirror check catches a planted seat leak.
+
+| Check | Expectation | A failure means |
+|---|---|---|
+| mirror | greedy vs greedy splits every board 1 to 1, both games on the same board | seat or slot information leaks, or randomness is not controlled |
+| labels | greedy vs a reweighted greedy, then the same with slots swapped, gives identical games (winner, turns, dice) with labels flipped | the engine or runner favors slot `a` or a color |
+| null | random vs random has a 95 percent interval containing 0.5 | a hidden slot advantage that only shows with stochastic agents |
+| positive | greedy vs random has an interval lower bound above 0.9 | the runner cannot detect a real difference |
+
+The null check is statistical, so by design about 1 in 20 seed blocks would fail it by chance. It runs on fixed seeds, so its result is reproducible; rerun on a different `--start` before concluding anything from a single failure.
+
 ## Analysis outputs
 
 In `results/`:

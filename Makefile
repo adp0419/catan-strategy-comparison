@@ -2,7 +2,7 @@ PY := .venv/bin/python
 GUI := tools/catanatron-gui
 SEED ?= 1
 
-.PHONY: test smoke validate match run tournament board gui gui-stop
+.PHONY: test smoke validate sanity match run tournament board gui gui-stop
 
 test:
 	$(PY) -m pytest -q
@@ -12,6 +12,9 @@ smoke:
 
 validate:
 	$(PY) -m src.sim.validate_production $(or $(GAMES),1000)
+
+sanity:
+	$(PY) -m src.sim.sanity --pairs $(or $(PAIRS),300)
 
 match:
 	$(PY) -m src.sim.match $(or $(A),greedy) $(or $(B),random) --pairs $(or $(PAIRS),100)

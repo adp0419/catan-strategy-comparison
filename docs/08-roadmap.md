@@ -45,7 +45,7 @@ Branch `phase-3-sim`
 - Elo and Wilson confidence interval implementations with unit tests
 - Run a 500 pair Agent A versus Agent A sanity check; the win rate must land near 50 percent with seat swapping. If it does not, there is a bug in the runner, not an insight
 
-**Done when:** A vs A returns 50 percent within the confidence interval.
+**Done when:** the runner sanity suite passes (`make sanity`). The original bar, A vs A near 50 percent, was replaced because it cannot fail: Agent A is deterministic, so a seat swapped pair replays the same game mirrored and the rate is exactly 50 percent by construction. **Met** on 300 pairs: mirror 300/300 boards split, labels 600/600 games identical, null 0.472 with CI containing 0.5, positive control CI low 0.994.
 
 ## Phase 4: Agent B
 

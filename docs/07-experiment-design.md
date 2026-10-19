@@ -115,6 +115,14 @@ Every experiment run is saved to its own folder, `data/runs/<date>_<name>/`, and
 
 Runs default to the evaluation seeds (1,000,001 onward) and **refuse to start on uncommitted code** there, so every reported number maps to an exact commit. `--allow-dirty` overrides this and the override is recorded in `meta.json`.
 
+### Round robin and Elo (`src/sim/tournament.py`, `src/analysis/elo.py`)
+
+`make tournament NAME=rr AGENTS="greedy victory_point weighted_random random" PAIRS=200` plays every pair of agents on the same seed block, one run folder per matchup inside a tournament folder, and writes `win_rates.csv` (every ordered matchup with games, wins, rate, Wilson interval) and `elo.csv`.
+
+Ratings are a Bradley-Terry maximum likelihood fit, reported on the Elo scale (400 log10) with `random` anchored at 0. Unlike sequential Elo, the fit does not depend on game order. Each matchup gets one prior game split evenly, which keeps ratings finite when one agent wins every game. Standard errors come from 200 bootstrap resamples of each matchup.
+
+**Read perfect records as lower bounds.** When an agent wins every game of a matchup, its rating gap is set by the prior, not by data, and the bootstrap error is too small because every resample is also a sweep. Example from a 150 pair check run: greedy went 900 of 900 and rated +1181, victory_point +98, weighted_random +94. Ratings are informative for competitive matchups such as A vs B.
+
 ## Analysis outputs
 
 In `results/`:

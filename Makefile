@@ -2,7 +2,7 @@ PY := .venv/bin/python
 GUI := tools/catanatron-gui
 SEED ?= 1
 
-.PHONY: test smoke validate match run board gui gui-stop
+.PHONY: test smoke validate match run tournament board gui gui-stop
 
 test:
 	$(PY) -m pytest -q
@@ -18,6 +18,9 @@ match:
 
 run:
 	$(PY) -m src.sim.runs $(or $(NAME),run) $(or $(A),greedy) $(or $(B),random) --pairs $(or $(PAIRS),100) $(if $(START),--start $(START))
+
+tournament:
+	$(PY) -m src.sim.tournament $(or $(NAME),tournament) $(or $(AGENTS),greedy victory_point weighted_random random) --pairs $(or $(PAIRS),100) $(if $(START),--start $(START))
 
 board:
 	$(PY) -m src.analysis.board_plot --seed $(SEED) $(if $(MOVES),--moves $(MOVES)) $(if $(A),--a $(A)) $(if $(B),--b $(B)) --out data/boards/board.png

@@ -1,4 +1,4 @@
-from src.agents.agent_a import GreedyAgent
+from src.agents.agent_a import WEIGHTS, GreedyAgent
 from src.agents.baselines import RandomAgent, VictoryPointAgent, WeightedRandomAgent
 
 AGENTS = {
@@ -18,3 +18,11 @@ def make_agent(spec, seed):
 
 def spec_name(spec):
     return spec if isinstance(spec, str) else spec[0]
+
+
+def describe(spec):
+    name, kw = (spec, {}) if isinstance(spec, str) else spec
+    out = {"name": name}
+    if name == "greedy":
+        out["weights"] = dict(WEIGHTS, **(kw.get("weights") or {}))
+    return out

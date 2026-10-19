@@ -103,6 +103,18 @@ Players are recorded by slot, `"a"` or `"b"`, never by color, so an agent can pl
 
 `run_match(..., decision_every=100)` records decisions for seeds divisible by 100, so 1 percent of games, chosen by seed so the sample is reproducible. A summary record is about 3 KB; one with decisions is about 25 KB. `agent_b_archetype` and `archetype_switches` arrive with Agent B.
 
+### Run folders (`src/sim/runs.py`)
+
+Every experiment run is saved to its own folder, `data/runs/<date>_<name>/`, and is never overwritten (a repeated name gets `_2`, `_3`, ...). Start one with `make run NAME=pilot A=greedy B=random PAIRS=200` or `python -m src.sim.runs`; `load_run(path)` reads one back.
+
+| File | Contents |
+|---|---|
+| `meta.json` | run name and time; both agents with their full resolved weights; pairs, games, seed range and seed band (`tuning`, `check`, `evaluation`); decision sampling rate; git commit and whether the tree had uncommitted changes; catanatron version, VP target, turn cap; Python version |
+| `games.jsonl` | one game record per line, schema above |
+| `summary.json` | win rate with Wilson interval, per seat rates, first seat rate, median turns, runtime |
+
+Runs default to the evaluation seeds (1,000,001 onward) and **refuse to start on uncommitted code** there, so every reported number maps to an exact commit. `--allow-dirty` overrides this and the override is recorded in `meta.json`.
+
 ## Analysis outputs
 
 In `results/`:

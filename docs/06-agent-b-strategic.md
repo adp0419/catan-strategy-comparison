@@ -156,6 +156,27 @@ score(state, action) = base_score(state, action) * plan_weight(archetype, action
 - `milestone_bonus` strongly rewards the specific next step in the plan, so the agent executes a sequence rather than drifting
 - `opponent_term` is Agent B's unique layer, described below
 
+### Implementation: evaluator (`src/agents/agent_b.py`, `StrategicAgent`, registry name `strategic`)
+
+- `base_score` is literally `GreedyAgent().score` with the frozen weights, so Agent B starts from Agent A's exact numbers.
+- `plan_weight` multiplies the base score by the archetype's weight for that action kind. It only scales **positive** scores: a negative score (a robber move that hurts Agent B, a costly trade) is left as is, so a weight above 1 never makes a bad move look worse or better by accident. Rolls, end turn and discards are unweighted.
+- **Placement** blends Agent A's settlement value with the archetype's `node_fit` (how much the node raises that archetype's viability): `(1 - mix) * base + mix * node_fit`, with `PLACEMENT_MIX = 0.25`.
+- `milestone_bonus` (`MILESTONE_BONUS = 4` pips, main phase only) goes to the action that completes the milestone: the city, the settlement, the dev card, a road that grows longest road when the milestone is `road`. For `reach_node_<n>` it goes to a settlement on `n`, or to a road that shortens the path to `n`, scaled `bonus / (1 + roads still needed)`. A bank trade earns the bonus when it makes the milestone item affordable right now.
+- `report()` returns the starting plan, final plan, switches and number of checks. `play_game` stores it as `plans` in the game record for any agent that has it, which is what the archetype breakdown in `07` reads.
+
+**First results (tuning seeds 1 to 200, 400 games per row, against frozen Agent A):**
+
+| Variant | Agent B win rate |
+|---|---|
+| mix 0.5, bonus 4 | 0.430 |
+| mix 0.5, bonus 0 | 0.435 |
+| mix 0, bonus 4 | 0.495 |
+| mix 0, bonus 0 | 0.502 |
+| mix 0.1, bonus 4 | 0.517 |
+| mix 0.25, bonus 4 | 0.520 |
+
+Strong plan-driven placement hurt: specialists, `LongestRoad` most of all (29 of 101), traded too much raw production for profile fit. At 0.25 the blend is harmless and the agent is level with Agent A, which is what the layers so far should produce, since they only reweight Agent A's own numbers. The 95 percent interval at 400 games is about ±0.05, so none of the 0.495 to 0.520 rows differ from each other or from 0.5. Any real edge has to come from the layers that follow: lookahead, opponent modeling, and the Reactor.
+
 ### Multi turn lookahead
 
 Agent B evaluates whether an action advances it toward its milestone, not just its immediate value. Implement as a shallow plan-aware search: for the top K candidate actions, simulate the next 2 to 3 turns with expected production (not sampled dice, to keep it deterministic and cheap) and score the resulting position against the archetype target profile.

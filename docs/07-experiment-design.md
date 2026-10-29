@@ -99,9 +99,10 @@ Players are recorded by slot, `"a"` or `"b"`, never by color, so an agent can pl
 | `robber` | every robber move: turn, mover, hex id, victim, stolen card |
 | `dev_cards` | every dev card bought: turn, buyer, card |
 | `rolls` | every dice total in order |
+| `plans` | only for agents with a `report` method (Agent B): per slot the starting plan, final plan, every switch (turn, from, to, reason), and the number of checkpoints |
 | `decisions` | only in sampled games: per decision the turn, player, chosen action, number of options, and for agents with a `scores` method the chosen score and the top 5 alternatives with scores |
 
-`run_match(..., decision_every=100)` records decisions for seeds divisible by 100, so 1 percent of games, chosen by seed so the sample is reproducible. A summary record is about 3 KB; one with decisions is about 25 KB. `agent_b_archetype` and `archetype_switches` arrive with Agent B.
+`run_match(..., decision_every=100)` records decisions for seeds divisible by 100, so 1 percent of games, chosen by seed so the sample is reproducible. A summary record is about 3 KB; one with decisions is about 25 KB. Agent B's archetype and switches live in `plans`.
 
 ### Run folders (`src/sim/runs.py`)
 

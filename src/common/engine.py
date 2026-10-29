@@ -465,6 +465,9 @@ def play_game(agent_a, agent_b, seed, swap_order=False, turn_limit=TURNS_LIMIT, 
         "rolls": [sum(a.value) for a in st.actions if a.action_type == ActionType.ROLL],
         "num_actions": len(st.actions),
     }
+    plans = {slots[c]: agents[c].report() for c in SEATS if hasattr(agents[c], "report")}
+    if plans:
+        log["plans"] = plans
     if record_decisions:
         log["decisions"] = decisions
     return log

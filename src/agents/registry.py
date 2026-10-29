@@ -1,4 +1,5 @@
 from src.agents.agent_a import WEIGHTS, GreedyAgent
+from src.agents.agent_b import StrategicAgent
 from src.agents.baselines import RandomAgent, VictoryPointAgent, WeightedRandomAgent
 
 AGENTS = {
@@ -6,6 +7,7 @@ AGENTS = {
     "weighted_random": lambda seed, **kw: WeightedRandomAgent(seed),
     "victory_point": lambda seed, **kw: VictoryPointAgent(seed),
     "greedy": lambda seed, **kw: GreedyAgent(kw.get("weights")),
+    "strategic": lambda seed, **kw: StrategicAgent(**kw),
 }
 
 

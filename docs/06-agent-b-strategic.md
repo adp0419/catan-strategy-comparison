@@ -121,6 +121,26 @@ The cosine terms ask "does this production look more like this plan than like a 
 
 **Milestones** are strings: `settlement`, `city`, `road`, `dev_card`, or `reach_node_<n>` for an open node that roads have to reach first. Every archetype falls back to `dev_card` when its own priority list is empty. **Death conditions:** `Expansion` has no open node within 3 roads (or no settlement pieces); `OreWheatSheep` produces no ore or no wheat; `LongestRoad` is out of roads, has no buildable edge, or trails by at least the roads it has left (never dead while it holds the card); `PortPlay` has no owned or reachable 2:1 port; `DevRush` faces an empty deck; `CitiesAndRoads` never dies, which is what makes it the fallback.
 
+### Implementation: planner (`src/agents/planner.py`)
+
+`Planner.update(state)` runs on every Agent B decision and returns the active archetype. It is cheap except at checkpoints, where it scores all six archetypes.
+
+**Checkpoints** (at most one per turn; `state["turn"]` counts both players' turns, so 10 turns is 5 of Agent B's):
+
+| Reason | When |
+|---|---|
+| `start` | first decision of the game, during placement |
+| `placement_done` | first main phase decision |
+| `dead` | the active archetype's `is_dead` is true |
+| `target_lost` | the node the plan was routing to (`reach_node_<n>`) is no longer settleable |
+| `robber` | the robber has blocked one of Agent B's hexes for 3 straight turns |
+| `opp_vp` | the opponent first shows 7 or more VP (fires once) |
+| `periodic` | 10 turns since the last check |
+
+**Selection.** Dead archetypes are ineligible. Among the rest, `pick` takes the highest viability, but a specialist must beat `CitiesAndRoads` by `DEFAULT_EDGE = 1.15`; ties break by name for determinism. **Switching cost:** once a plan is active, a different pick replaces it only if its viability exceeds the current plan's by `SWITCH_MARGIN = 1.25`, unless the current plan is dead. Every checkpoint is logged in `history` (turn, reason, chosen plan, all scores), and every change in `switches`. `Planner(replan=False)` picks once at `start` and never re-checks, which is the `AgentB_noReplan` ablation.
+
+**Thrash check.** With Agent A making every move and the planner only watching one seat, 60 games averaged 0.53 switches per game, max 2. Most switches came at `placement_done`, which is expected when Agent A places without regard to the plan. Re-measure once Agent B places for its own plan. Pivot cost matrix, degradation scoring, and salvage checks are the later failure detection layer and are not in the base planner, as the MVP note above requires.
+
 ## Layer 2: Evaluator
 
 Same action types as Agent A, but each score is modulated by the plan.

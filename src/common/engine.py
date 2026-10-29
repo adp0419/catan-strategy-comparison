@@ -323,6 +323,25 @@ def holder(color, me):
     return "me" if color == me else "opp"
 
 
+def public_entry(act, viewer):
+    who = holder(act.color, viewer)
+    val = act.value
+    if act.action_type == ActionType.BUY_DEVELOPMENT_CARD and who == "opp":
+        val = None
+    elif act.action_type == ActionType.MOVE_ROBBER:
+        coord, victim, stolen = val
+        val = (coord, holder(victim, viewer), stolen)
+    return {"player": who, "action": act.action_type.name, "value": val}
+
+
+def public_log(st, color):
+    if not hasattr(st, "_public_log"):
+        st._public_log = {}
+    log = st._public_log.setdefault(color, [])
+    log.extend(public_entry(a, color) for a in st.actions[len(log):])
+    return log
+
+
 def extract_state(game, color):
     st = game.state
     opp = next(c for c in st.colors if c != color)
@@ -354,6 +373,7 @@ def extract_state(game, color):
         "dev_deck_remaining": len(st.development_listdeck),
         "longest_road_holder": holder(get_longest_road_color(st), color),
         "largest_army_holder": holder(get_largest_army(st)[0], color),
+        "log": public_log(st, color),
     }
 
 

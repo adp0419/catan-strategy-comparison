@@ -231,6 +231,25 @@ Agent B maintains:
 
 All of this is derived from public information only. The wrapper in `common/engine.py` must enforce that hidden state is never readable, so a modeling bug cannot become cheating.
 
+### Implementation: opponent model (`src/agents/opponent.py`)
+
+`StrategicAgent(opp_model=False)` is `AgentB_noOppModel`. The model reads only the public `log` and the public `opp` fields (see `03`).
+
+**Hand tracking.** The model replays the log in order: every non-7 roll pays the opponent from the buildings they had *at that point* (rebuilt from the log, not read from the current state), the robber's position at that point, cities double. Their second opening settlement pays one card per adjacent hex. Builds, dev buys and bank trades subtract their cost (opening roads and Road Building roads are free), discards subtract the listed cards, steals move one known card either way, Year of Plenty adds two, Agent B's own Monopoly zeroes that resource, and the opponent's Monopoly adds what Agent B held at its last decision. After each update the belief is rescaled to the public hand size, which soaks up anything the replay missed (bank shortages, timing). Against the true hidden hand over 30 games and 3,456 decisions: **exact on 99.0 percent** of decisions, mean absolute error 0.011 cards, against 3.55 for Agent A's style of estimate (hand size split by production share). Before buildings were replayed in order it was exact on 88 percent; a city built right after a roll was being credited to that roll. The remaining misses are opponent Monopolies, where the cards Agent B gained since its last decision are not counted.
+
+**VP estimate.** Hidden VP = the opponent's unplayed dev cards × the chance an unseen card is a VP card, computed from the full deck (14 knights, 5 VP, 2 each of road building, year of plenty, monopoly) minus the cards Agent B drew itself. `estimated_vp` = visible VP + hidden VP. The Reactor uses this.
+
+**Archetype inference.** `mirror` swaps the state so the opponent is `me` (their tracked hand, their buildings, bonus holders flipped), then runs the same `viabilities` and `pick` Agent B uses on itself, once per turn. `key_weights` is that archetype's target profile normalized to mean 1: above 1 for resources the opponent's plan depends on, below 1 for ones it does not.
+
+**Opponent term in the evaluator.**
+
+- **Robber:** `opponent_term = robber_damage weight × damage to the opponent on that hex × 36 × (key weight of the hex's resource − 1)`. Agent A's base already counts damage once at weight 1, so the total damage is weighted by the key weight: blocking a resource the opponent's plan needs counts more, an off-plan one less.
+- **Monopoly:** the base estimate (hand size × production share) is replaced by the tracked holding of that resource, and Monopoly is played only when that is at least `MONOPOLY_MIN = 3` cards (Agent A's threshold is 2 on its rougher estimate). This holds the card until the haul is worth it.
+
+`report()` adds `opp_plan`, the opponent archetype inferred at the last update.
+
+**Result** (600 pairs, seeds 1 to 600, against frozen Agent A, lookahead on): without the model **0.466**, with it **0.500**. The first layer to move the number, though one standard error of a paired difference at this size is about 0.02, so this is suggestive rather than settled. The Phase 5 `noOppModel` ablation on evaluation seeds is the real measurement.
+
 ## Required ablations
 
 Agent B has several capabilities Agent A lacks. To attribute the win rate correctly, run these ablations as separate agents in the tournament:

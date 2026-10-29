@@ -95,6 +95,8 @@ All production figures are **per dice roll**. In 1v1 both players' rolls pay out
 }
 ```
 
+`"log"` is the public action history, one entry per engine action: `{"player": "me" | "opp", "action": ActionType name, "value": ...}`. It is everything both players at a real 1v1 table see: rolls, builds, bank trades, discards (they go to the bank face up), dev card plays, and robber moves including the stolen card (in 1v1 the thief and the victim are the only two players, so both know it). The one hidden value, the card an opponent draws on `BUY_DEVELOPMENT_CARD`, is replaced with `None`; the viewer's own draws are kept. Robber victims are rewritten as `"me"` / `"opp"`. The wrapper caches the log per viewer and extends it incrementally, so it costs nothing per call. Treat it as read only. `tests/test_engine.py` pins the exact set of visible fields and checks that opponent draws are blank.
+
 Note the asymmetry on `opp`: the opponent's hand contents and unplayed dev cards are hidden. Agents may track an inferred distribution over the opponent's hand, but must not read the true values. Enforce this in the wrapper, not by convention, so a bug cannot leak information.
 
 ## Opponent hand inference (optional, Agent B only)

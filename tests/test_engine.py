@@ -227,8 +227,10 @@ def test_extract_state_hides_opponent_info():
     st = extract_state(game, p1)
     assert set(st) == {
         "turn", "phase", "seat", "board", "robber_hex", "me", "opp", "bank",
-        "dev_deck_remaining", "longest_road_holder", "largest_army_holder",
+        "dev_deck_remaining", "longest_road_holder", "largest_army_holder", "log",
     }
+    assert set(st["log"][0]) == {"player", "action", "value"}
+    assert all(e["value"] is None for e in st["log"] if e["player"] == "opp" and e["action"] == "BUY_DEVELOPMENT_CARD")
     assert set(st["opp"]) == {
         "settlements", "cities", "roads", "knights_played", "road_length", "ports",
         "hand_size", "dev_cards_count", "visible_vp",

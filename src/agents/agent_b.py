@@ -1,14 +1,17 @@
 from catanatron.models.enums import ActionType
 
-from src.agents.agent_a import GreedyAgent, with_road
+from src.agents.agent_a import PIPS_PER_CARD, GreedyAgent, hex_by_coord, with_road
 from src.agents.lookahead import HORIZON, TOP_K, Lookahead
+from src.agents.opponent import OpponentModel
 from src.agents.planner import REACH, Planner
 from src.common.board import road_distance
 from src.common.economy import COSTS, can_afford
+from src.common.robber import robber_damage
 from src.common.scoring import longest_road_length
 
 MILESTONE_BONUS = 4.0
 PLACEMENT_MIX = 0.25
+MONOPOLY_MIN = 3.0
 
 KINDS = {
     ActionType.BUILD_SETTLEMENT: "settlement",
@@ -43,12 +46,13 @@ def milestone_item(mile):
 class StrategicAgent:
     name = "strategic"
 
-    def __init__(self, replan=True, bonus=MILESTONE_BONUS, mix=PLACEMENT_MIX, horizon=HORIZON, top_k=TOP_K):
+    def __init__(self, replan=True, bonus=MILESTONE_BONUS, mix=PLACEMENT_MIX, horizon=HORIZON, top_k=TOP_K, opp_model=True):
         self.base = GreedyAgent()
         self.planner = Planner(replan=replan)
         self.bonus = bonus
         self.mix = mix
         self.look = Lookahead(self, horizon=horizon, top_k=top_k)
+        self.model = OpponentModel() if opp_model else None
 
     def decide(self, state, actions):
         if len(actions) == 1:
@@ -59,6 +63,8 @@ class StrategicAgent:
 
     def scores(self, state, actions):
         arch = self.planner.update(state)
+        if self.model:
+            self.model.update(state)
         weights = arch.action_weights(state)
         mile = arch.next_milestone(state)
         cache = {}
@@ -68,10 +74,25 @@ class StrategicAgent:
     def score(self, state, act, arch, weights, mile, cache):
         kind = KINDS.get(act.action_type)
         base = self.base.score(state, act, cache)
+        if self.model and kind == "monopoly":
+            base = self.monopoly_value(act.value)
         if kind == "settlement" and state["phase"] == "placement":
             base = (1 - self.mix) * base + self.mix * arch.node_fit(state, act.value)
         val = base * weights[kind] if kind and base > 0 else base
-        return val + self.milestone_bonus(state, act, kind, mile)
+        return val + self.milestone_bonus(state, act, kind, mile) + self.opponent_term(state, act, kind)
+
+    def monopoly_value(self, res):
+        est = self.model.hand[res]
+        return self.base.w["monopoly"] * est if est >= MONOPOLY_MIN else 0.0
+
+    def opponent_term(self, state, act, kind):
+        if not self.model or kind != "robber":
+            return 0.0
+        h = hex_by_coord(state, act.value[0])
+        if h["resource"] not in self.model.key_weights(state):
+            return 0.0
+        key = self.model.key_weights(state)[h["resource"]]
+        return self.base.w["robber_damage"] * robber_damage(state, "opp", h["id"]) * PIPS_PER_CARD * (key - 1)
 
     def milestone_bonus(self, state, act, kind, mile):
         if state["phase"] != "main" or kind is None:
@@ -110,4 +131,5 @@ class StrategicAgent:
             "final": p.plan,
             "switches": p.switches,
             "checks": len(p.history),
+            "opp_plan": self.model.plan[1] if self.model and self.model.plan else None,
         }

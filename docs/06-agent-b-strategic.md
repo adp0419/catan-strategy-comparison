@@ -92,6 +92,35 @@ Each archetype computes viability from shared primitives only. Examples:
 - `LongestRoad`: longest open edge corridor length, times wood/brick production, times count of settleable nodes along it
 - `PortPlay`: best 2:1 port match, measured as port resource production times port accessibility distance
 
+### Implementation: archetypes (`src/agents/archetypes.py`)
+
+All six archetypes are built only from `src/common/` primitives. Production is measured in pips per resource (cards per roll times 36, the same unit Agent A scores in).
+
+**One currency across archetypes.** Viability is total pips times a shape factor, so archetypes are compared on the same scale:
+
+```
+fit(pips, profile) = total_pips * cos(pips, profile) / cos(pips, balanced)
+```
+
+The cosine terms ask "does this production look more like this plan than like a generic balanced plan?" `CitiesAndRoads` uses the balanced profile, so its ratio is exactly 1 and it is the baseline every specialist is measured against. Two earlier forms were rejected after checking 200 to 300 opening boards: a plain weighted pip sum let every specialist win (lopsided mixes got free bonus pips), and an absolute cosine made `CitiesAndRoads` win 95 percent of boards.
+
+**Requirement factors.** `need(pips, resources, amount)` runs from 0.4 (none of the resource) up to 1.0 (at least `amount` pips). The floor is not zero because 4:1 bank trades and ports still exist. Each archetype multiplies `fit` by its needs and its board terms:
+
+| Archetype | Needs | Board terms |
+|---|---|---|
+| `Expansion` | wood 4, brick 4 | `space`: pips of the top 3 open nodes within 3 roads, full at 27 |
+| `OreWheatSheep` | ore 4, wheat 4, sheep 3 (waived with a sheep 2:1 port) | mild penalty for low wood plus brick |
+| `LongestRoad` | wood 5, brick 5 | `corridor`: reachable nodes within 5 roads plus settleable ones along it; halved when 4 or more segments behind the opponent |
+| `CitiesAndRoads` | ore plus wheat 6 | diversity factor, 0.75 + 0.05 per resource produced |
+| `PortPlay` | port resource at least 8 pips | best 2:1 port, access 1 when owned, `1/(1+d)` when an open port node is `d` roads away (within 3), 0 otherwise |
+| `DevRush` | ore 4, wheat 4, sheep 4 | share of the dev deck still remaining |
+
+**Viability at placement.** Before Agent B has buildings there is nothing to measure, so each archetype projects its own opening: it greedily picks the remaining opening settlements that most raise its own score (distance rule respected, opponent picks ignored), then scores that hypothetical position. Viability therefore means "the best this plan could do on this board". After placement it is the archetype's score on what Agent B actually owns.
+
+**Default edge.** Because each specialist chooses its own ideal spots, some lean toward its profile is almost always available, so specialists edge out `CitiesAndRoads` on raw viability. The Planner therefore requires a specialist to beat `CitiesAndRoads` by a factor of 1.15. On 300 opening boards that gives cities and roads 100, longest road 91, dev rush 61, port play 24, expansion 18, OWS 6. All of these constants are hand set for v1 and are candidates for tuning on tuning seeds only, never evaluation seeds.
+
+**Milestones** are strings: `settlement`, `city`, `road`, `dev_card`, or `reach_node_<n>` for an open node that roads have to reach first. Every archetype falls back to `dev_card` when its own priority list is empty. **Death conditions:** `Expansion` has no open node within 3 roads (or no settlement pieces); `OreWheatSheep` produces no ore or no wheat; `LongestRoad` is out of roads, has no buildable edge, or trails by at least the roads it has left (never dead while it holds the card); `PortPlay` has no owned or reachable 2:1 port; `DevRush` faces an empty deck; `CitiesAndRoads` never dies, which is what makes it the fallback.
+
 ## Layer 2: Evaluator
 
 Same action types as Agent A, but each score is modulated by the plan.

@@ -132,14 +132,32 @@ The cosine terms ask "does this production look more like this plan than like a 
 | `start` | first decision of the game, during placement |
 | `placement_done` | first main phase decision |
 | `dead` | the active archetype's `is_dead` is true |
-| `target_lost` | the node the plan was routing to (`reach_node_<n>`) is no longer settleable |
-| `robber` | the robber has blocked one of Agent B's hexes for 3 straight turns |
+| `degraded` | the failure detection score crosses its threshold and no single action salvages the plan (see below). In the base planner a lost target node and a robber parked 3 turns were immediate checkpoints; they are now signals feeding this score |
 | `opp_vp` | the opponent first shows 7 or more VP (fires once) |
 | `periodic` | 10 turns since the last check |
 
-**Selection.** Dead archetypes are ineligible. Among the rest, `pick` takes the highest viability, but a specialist must beat `CitiesAndRoads` by `DEFAULT_EDGE = 1.15`; ties break by name for determinism. **Switching cost:** once a plan is active, a different pick replaces it only if its viability exceeds the current plan's by `SWITCH_MARGIN = 1.25`, unless the current plan is dead. Every checkpoint is logged in `history` (turn, reason, chosen plan, all scores), and every change in `switches`. `Planner(replan=False)` picks once at `start` and never re-checks, which is the `AgentB_noReplan` ablation.
+**Selection.** Dead archetypes are ineligible. Each candidate's viability is first discounted by the pivot cost from the current plan (below). Among the rest, `pick` takes the highest, but a specialist must beat `CitiesAndRoads` by `DEFAULT_EDGE = 1.15`; ties break by name for determinism. **Switching cost:** once a plan is active, a different pick replaces it only if its discounted viability exceeds the current plan's by `SWITCH_MARGIN = 1.25` (`PIVOT_MARGIN = 1.05` at a `degraded` checkpoint), unless the current plan is dead. Every checkpoint is logged in `history` (turn, reason, chosen plan, all scores), and every change in `switches`. `Planner(replan=False)` picks once at `start` and never re-checks, which is the `AgentB_noReplan` ablation.
 
-**Thrash check.** With Agent A making every move and the planner only watching one seat, 60 games averaged 0.53 switches per game, max 2. Most switches came at `placement_done`, which is expected when Agent A places without regard to the plan. Re-measure once Agent B places for its own plan. Pivot cost matrix, degradation scoring, and salvage checks are the later failure detection layer and are not in the base planner, as the MVP note above requires.
+**Thrash check.** With Agent A making every move and the planner only watching one seat, 60 games averaged 0.53 switches per game, max 2. Most switches came at `placement_done`, which is expected when Agent A places without regard to the plan. Re-measured with the full Agent B playing (failure detection on): 0.48 switches per game over 1,200 games against Agent A, max 3; 0.41, max 2, in the Phase 4 check against the baselines.
+
+### Implementation: failure detection and pivoting (`src/agents/failure.py`, `src/agents/planner.py`)
+
+Layered on after the base planner was shown to work, per the MVP note above. `Monitor.update` runs once per main phase turn and produces five signals in [0, 1]. Each archetype's **core resources** are those whose profile weight is at least 75 percent of its largest (`OreWheatSheep`: ore and wheat; `CitiesAndRoads`: all five).
+
+| Signal | Weight | Value |
+|---|---|---|
+| `target_lost` | 0.6 | the plan's `reach_node_<n>` was taken: 1 minus (best open node within 3 roads ÷ lost node), in pips, so a loss with an equal replacement in reach scores 0 |
+| `choked` | 0.5 | consecutive turns the robber has sat on a core hex Agent B produces from, ÷ 3 |
+| `shortfall` | 0.5 | over the last 12 rolls (at least 6), realized core income against `expected_production`; 0 below a 30 percent shortfall, rising to 1 at 100 percent. Catches both robbing and plain bad dice |
+| `stalled` | 0.4 | the milestone has not changed for 12 turns; rises to 1 at 24 |
+| `tempo` | 0.4 | how much faster the opponent's turns-to-10 is than Agent B's, from VP gap and production (`eta`: VP needed × 4 cards ÷ 2 rolls of income); the opponent's VP is the model's estimate including hidden cards |
+| `dead_end` | 1.0 | a core resource with zero production and no port for it |
+
+The **degradation score** is the weighted sum. At 1.0 or more, with at least 6 turns since the last alarm, the Planner first checks **salvage**: a Knight in hand when `choked` is full, or Year of Plenty when `dead_end` is set. A salvage logs `salvage` in `history` and, for that turn only, makes the fix card the milestone, so the milestone bonus pushes the agent to play it. Without a salvage the Planner runs a `degraded` checkpoint and resets the stall and shortfall windows.
+
+**Pivot cost matrix** (`PIVOT_COST`, fraction of the target's viability lost by switching to it from the current plan; default 0.15): free between `Expansion`, `LongestRoad` and `CitiesAndRoads` (0 to 0.1); 0.05 between `OreWheatSheep` and `DevRush` and from either back to `CitiesAndRoads`; 0.25 to 0.35 between the wood/brick plans and the ore/wheat plans in either direction. `PortPlay` needs no row, since an unreachable port already makes its viability 0. Partial pivots (switching the route to 10 VP inside one archetype) are not implemented; terminal pivots belong to the Reactor.
+
+**Diagnostics** (600 pairs, seeds 1 to 600, against Agent A): 1.97 degradation alarms per game, of which 128 in 1,200 games were salvages; 0.48 switches per game, from `periodic` 213, `placement_done` 160, `degraded` 128, `dead` 61, `opp_vp` 14; median switch turn 32. **Pivot outcome rate:** games with a pivot won 0.541 (545 games), games where the first plan held won 0.469 (655). This is a correlation, not an effect: pivots are triggered by position, so the `noReplan` ablation is what isolates the mechanism. Win rate against Agent A with detection on was 0.502, against 0.502 with the base planner (both with the Reactor), so detection changed how plans are managed without moving the headline number.
 
 ## Layer 2: Evaluator
 
@@ -221,6 +239,18 @@ Overrides the plan under these conditions:
 - **Plan dead:** `is_dead` triggers immediate re-planning.
 - **Monopoly timing:** with opponent hand inference, play monopoly when the estimated holding of a resource peaks, rather than immediately.
 
+### Implementation: Reactor (`src/agents/reactor.py`)
+
+`StrategicAgent(reactor=False)` is `AgentB_noReactor`. **Race mode** starts when the opponent's estimated VP (visible plus expected hidden VP cards; visible only without the opponent model) reaches `RACE_VP = 8`, and lasts while it holds. In race mode the active archetype is wrapped in `Race`, which replaces its weights and milestone, so the evaluator and the lookahead rollouts both use the override:
+
+- **Weights:** settlement and city 1.2, Road Building 1.2, dev card 0.8, road 0.6, everything else 1.
+- **Milestone = fastest VP:** among the options available, the one with the fewest expected rolls per VP (`rolls_to_afford` on Agent B's hand, production and port ratios): a Knight in hand that takes Largest Army (0 rolls, 2 VP), longest road if it is at most 2 roads away (cost of those roads, counted as a 4 VP swing when the opponent holds it, 2 otherwise), a city, a settlement on a buildable node, or roads plus a settlement on the best node within 2 roads.
+- **Robber:** the opponent model's key resource weighting is switched off, so the robber goes back to blocking the opponent's largest production, since in a race any card they collect matters.
+
+Not implemented: contesting a bonus card defensively when the *opponent* is one move from taking it.
+
+`report()` adds `race_from`, the turn race mode first started. **Result** (600 pairs, seeds 1 to 600, against Agent A): race mode started in 31 percent of games; win rate 0.502 with the Reactor, 0.500 without. Neutral.
+
 ## Opponent modeling
 
 Agent B maintains:
@@ -260,3 +290,20 @@ Agent B has several capabilities Agent A lacks. To attribute the win rate correc
 - B placement only (archetype used for placement, then greedy mid game) — this directly tests H3
 
 The ablation table is one of the strongest results this project can produce, because it decomposes "strategy" into components and measures each one.
+
+### Implementation: ablation variants (`src/agents/registry.py`)
+
+Each is the same `StrategicAgent` with one capability switched off, registered under its own name (listed in `07`). An added fifth, `strategic_no_reactor`, isolates the Reactor.
+
+**Preliminary table.** Tuning seeds 1 to 600, 1,200 games per row, each against frozen Agent A, run after all layers were in. This is for orientation only; the reported table must come from evaluation seeds in Phase 5.
+
+| Variant | Win rate vs Agent A | 95% CI |
+|---|---|---|
+| `strategic` (full) | 0.502 | [0.473, 0.530] |
+| `strategic_no_lookahead` | 0.508 | [0.480, 0.537] |
+| `strategic_no_opp_model` | 0.463 | [0.434, 0.491] |
+| `strategic_no_replan` | 0.477 | [0.449, 0.505] |
+| `strategic_placement_only` | 0.481 | [0.453, 0.509] |
+| `strategic_no_reactor` | 0.498 | [0.470, 0.527] |
+
+What it suggests, pending evaluation seeds: the opponent model is the one component whose removal clearly hurts (about 4 points, its interval excludes 0.5); replanning and mid game plan play are worth a couple of points each; lookahead and the Reactor are neutral. Full Agent B is level with Agent A. Every variant plays the same seeds against the same opponent, so a paired comparison per board will be tighter than these marginal intervals.

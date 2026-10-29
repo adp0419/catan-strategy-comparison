@@ -49,6 +49,9 @@ Run a full round robin, not just A versus B. The baselines calibrate whether bot
 7. `AgentB_noOppModel`
 8. `AgentB_noReplan`
 9. `AgentB_placementOnly`
+10. `AgentB_noReactor` (added in Phase 4, since the Reactor is a separate capability)
+
+Registry names (`make_agent`, `make match`, `make tournament`): `strategic`, `strategic_no_lookahead` (`horizon=0`), `strategic_no_opp_model` (`opp_model=False`; the Reactor then reads visible VP), `strategic_no_replan` (plan fixed at the first placement decision; no checkpoints, no failure detection), `strategic_placement_only` (plan used for placement, then plays exactly Agent A's scores), `strategic_no_reactor` (`reactor=False`). Each records its own name in `agents`, and `describe` stores its config in the run's `meta.json`.
 
 If Agent A does not comfortably beat the random baselines, stop and fix Agent A before reading anything into the A vs B result.
 
@@ -99,7 +102,7 @@ Players are recorded by slot, `"a"` or `"b"`, never by color, so an agent can pl
 | `robber` | every robber move: turn, mover, hex id, victim, stolen card |
 | `dev_cards` | every dev card bought: turn, buyer, card |
 | `rolls` | every dice total in order |
-| `plans` | only for agents with a `report` method (Agent B): per slot the starting plan, final plan, every switch (turn, from, to, reason), and the number of checkpoints |
+| `plans` | only for agents with a `report` method (Agent B): per slot the starting plan, final plan, every switch (turn, from, to, reason), the number of checkpoints, the inferred opponent archetype (`opp_plan`), the turn race mode started (`race_from`), the turns a degradation alarm fired (`degraded`), and each salvage (turn, fix, signals). Pivot outcome rate and pivot timing in `06` are computed from these fields |
 | `decisions` | only in sampled games: per decision the turn, player, chosen action, number of options, and for agents with a `scores` method the chosen score and the top 5 alternatives with scores |
 
 `run_match(..., decision_every=100)` records decisions for seeds divisible by 100, so 1 percent of games, chosen by seed so the sample is reproducible. A summary record is about 3 KB; one with decisions is about 25 KB. Agent B's archetype and switches live in `plans`.

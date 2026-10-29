@@ -1,6 +1,8 @@
 from src.agents.agent_a import GreedyAgent
 from src.agents.archetypes import DEFAULT, DevRush
-from src.agents.planner import CHECK_EVERY, DEFAULT_EDGE, ROBBER_TURNS, Planner, pick
+from src.agents.archetypes import CitiesAndRoads
+from src.agents.failure import ROBBER_TURNS
+from src.agents.planner import CHECK_EVERY, DEFAULT_EDGE, PIVOT_MARGIN, Planner, pick, pivot_cost
 from src.common.engine import extract_state, legal_actions, new_game, step
 from src.common.robber import robber_damage
 
@@ -90,15 +92,39 @@ def test_dead_plan_is_replaced():
     assert p.switches[-1]["reason"] == "dead"
 
 
-def test_parked_robber_triggers_check():
+def test_parked_robber_raises_choked_signal():
     state = after_setup(7)
     p = Planner()
     p.update(state)
     p.placed = True
+    p.plan, p.arch = "cities_and_roads", CitiesAndRoads()
     mine = next(h["id"] for h in state["board"]["hexes"] if robber_damage(state, "me", h["id"]) > 0)
     for i in range(1, ROBBER_TURNS + 1):
         p.update(dict(state, robber_hex=mine, turn=state["turn"] + i))
-    assert p.history[-1]["reason"] == "robber"
+    assert p.monitor.signals["choked"] == 1.0
+    assert p.degradation[-1][1] >= 0.5
+
+
+def test_pivot_costs_follow_shared_infrastructure():
+    assert pivot_cost("expansion", "longest_road") == 0
+    assert pivot_cost("ore_wheat_sheep", "dev_rush") < pivot_cost("expansion", "ore_wheat_sheep")
+    assert pivot_cost(None, "expansion") == pivot_cost("dev_rush", "dev_rush") == 0
+
+
+def test_pivot_cost_can_block_a_switch():
+    p = Planner()
+    p.plan = "expansion"
+    scores = dict(SCORES, expansion=10.0, cities_and_roads=5.0, ore_wheat_sheep=13.0)
+    assert p.choose(scores) == "expansion"
+    assert p.choose(dict(scores, longest_road=13.0)) == "longest_road"
+
+
+def test_degraded_check_uses_lower_margin():
+    p = Planner()
+    p.plan = "longest_road"
+    scores = dict(SCORES, longest_road=10.0, expansion=11.5, cities_and_roads=5.0)
+    assert p.choose(scores) == "longest_road"
+    assert p.choose(scores, PIVOT_MARGIN) == "expansion"
 
 
 def test_opponent_near_win_triggers_once():

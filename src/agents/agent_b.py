@@ -4,6 +4,7 @@ from src.agents.agent_a import PIPS_PER_CARD, GreedyAgent, hex_by_coord, with_ro
 from src.agents.lookahead import HORIZON, TOP_K, Lookahead
 from src.agents.opponent import OpponentModel
 from src.agents.planner import REACH, Planner
+from src.agents.reactor import Race, Reactor
 from src.common.board import road_distance
 from src.common.economy import COSTS, can_afford
 from src.common.robber import robber_damage
@@ -44,29 +45,48 @@ def milestone_item(mile):
 
 
 class StrategicAgent:
-    name = "strategic"
-
-    def __init__(self, replan=True, bonus=MILESTONE_BONUS, mix=PLACEMENT_MIX, horizon=HORIZON, top_k=TOP_K, opp_model=True):
+    def __init__(
+        self,
+        replan=True,
+        bonus=MILESTONE_BONUS,
+        mix=PLACEMENT_MIX,
+        horizon=HORIZON,
+        top_k=TOP_K,
+        opp_model=True,
+        reactor=True,
+        placement_only=False,
+        name="strategic",
+    ):
+        self.name = name
         self.base = GreedyAgent()
-        self.planner = Planner(replan=replan)
+        self.planner = Planner(replan=replan and not placement_only)
         self.bonus = bonus
         self.mix = mix
         self.look = Lookahead(self, horizon=horizon, top_k=top_k)
         self.model = OpponentModel() if opp_model else None
+        self.reactor = Reactor() if reactor else None
+        self.placement_only = placement_only
 
     def decide(self, state, actions):
         if len(actions) == 1:
-            self.planner.update(state)
+            self.observe(state)
             return actions[0]
         scores = self.scores(state, actions)
         return actions[max(range(len(actions)), key=lambda i: scores[i])]
 
-    def scores(self, state, actions):
-        arch = self.planner.update(state)
+    def observe(self, state):
         if self.model:
             self.model.update(state)
+        return self.planner.update(state, self.model)
+
+    def scores(self, state, actions):
+        arch = self.observe(state)
+        if self.placement_only and state["phase"] == "main":
+            return self.base.scores(state, actions)
+        if self.reactor:
+            arch = self.reactor.override(state, arch, self.model)
         weights = arch.action_weights(state)
-        mile = arch.next_milestone(state)
+        mile = self.planner.salvage or arch.next_milestone(state)
         cache = {}
         scores = [self.score(state, a, arch, weights, mile, cache) for a in actions]
         return self.look.adjust(state, actions, scores, arch)
@@ -79,14 +99,14 @@ class StrategicAgent:
         if kind == "settlement" and state["phase"] == "placement":
             base = (1 - self.mix) * base + self.mix * arch.node_fit(state, act.value)
         val = base * weights[kind] if kind and base > 0 else base
-        return val + self.milestone_bonus(state, act, kind, mile) + self.opponent_term(state, act, kind)
+        return val + self.milestone_bonus(state, act, kind, mile) + self.opponent_term(state, act, kind, arch)
 
     def monopoly_value(self, res):
         est = self.model.hand[res]
         return self.base.w["monopoly"] * est if est >= MONOPOLY_MIN else 0.0
 
-    def opponent_term(self, state, act, kind):
-        if not self.model or kind != "robber":
+    def opponent_term(self, state, act, kind, arch=None):
+        if not self.model or kind != "robber" or isinstance(arch, Race):
             return 0.0
         h = hex_by_coord(state, act.value[0])
         if h["resource"] not in self.model.key_weights(state):
@@ -132,4 +152,7 @@ class StrategicAgent:
             "switches": p.switches,
             "checks": len(p.history),
             "opp_plan": self.model.plan[1] if self.model and self.model.plan else None,
+            "race_from": self.reactor.race_from if self.reactor else None,
+            "salvages": [h for h in p.history if h["reason"] == "salvage"],
+            "degraded": [h["turn"] for h in p.history if h["reason"] == "degraded"],
         }

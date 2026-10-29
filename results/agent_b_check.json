@@ -1,0 +1,46 @@
+{
+  "agent": "strategic",
+  "pairs": 200,
+  "start": 900001,
+  "rows": {
+    "random": {
+      "rate": 1.0,
+      "ci": [
+        0.9904873594003194,
+        1.0
+      ],
+      "games": 400
+    },
+    "weighted_random": {
+      "rate": 0.9975,
+      "ci": [
+        0.9859763590327523,
+        0.9995585635705656
+      ],
+      "games": 400
+    },
+    "victory_point": {
+      "rate": 1.0,
+      "ci": [
+        0.9904873594003194,
+        1.0
+      ],
+      "games": 400
+    },
+    "switches": {
+      "mean": 0.41333333333333333,
+      "max": 2,
+      "spread": {
+        "0": 722,
+        "1": 460,
+        "2": 18
+      }
+    }
+  },
+  "ok": {
+    "random": true,
+    "weighted_random": true,
+    "victory_point": true,
+    "thrash": true
+  }
+}

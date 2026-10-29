@@ -58,7 +58,7 @@ Branch `phase-4-agent-b`
 - Opponent modeling and the Reactor layer
 - Ablation variants as separate agent classes
 
-**Done when:** Agent B completes games without plan thrash (switches per game below a set threshold) and beats the random baselines.
+**Done when:** Agent B completes games without plan thrash (switches per game below a set threshold) and beats the random baselines. The threshold, fixed before measuring: mean switches per game below 1.0 and no game above 4; against `random` and `weighted_random` the Wilson lower bound above 0.95; against `victory_point` above 0.5. **Met** (`make check-b`, 200 pairs per baseline on reserved check seeds from 900,001, `results/agent_b_check.json`): random 400/400, weighted random 399/400 (CI low 0.986), victory point 400/400; 0.41 switches per game, max 2. Built on branch `strategic-agent`. All six components are in, plus failure detection and pivoting and an extra `noReactor` ablation. Against frozen Agent A on tuning seeds, Agent B is level (about 0.50); see `06` for the layer by layer numbers. Agent B's constants are hand set and not yet tuned.
 
 ## Phase 5: Main experiment
 

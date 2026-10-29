@@ -175,13 +175,42 @@ score(state, action) = base_score(state, action) * plan_weight(archetype, action
 | mix 0.1, bonus 4 | 0.517 |
 | mix 0.25, bonus 4 | 0.520 |
 
-Strong plan-driven placement hurt: specialists, `LongestRoad` most of all (29 of 101), traded too much raw production for profile fit. At 0.25 the blend is harmless and the agent is level with Agent A, which is what the layers so far should produce, since they only reweight Agent A's own numbers. The 95 percent interval at 400 games is about ±0.05, so none of the 0.495 to 0.520 rows differ from each other or from 0.5. Any real edge has to come from the layers that follow: lookahead, opponent modeling, and the Reactor.
+Strong plan-driven placement hurt: specialists, `LongestRoad` most of all (29 of 101), traded too much raw production for profile fit. The 95 percent interval at 400 games is about ±0.05, so the 0.495 to 0.520 rows do not differ from each other. **Correction:** re-run at 600 pairs (seeds 1 to 600, 1,200 games), the chosen setting (mix 0.25, bonus 4, no lookahead) scores **0.474**, interval about [0.446, 0.502]. The 0.520 above was a lucky sample. Plan reweighting alone leaves Agent B slightly behind Agent A, not level. Any real edge has to come from the layers that follow: lookahead, opponent modeling, and the Reactor.
 
 ### Multi turn lookahead
 
 Agent B evaluates whether an action advances it toward its milestone, not just its immediate value. Implement as a shallow plan-aware search: for the top K candidate actions, simulate the next 2 to 3 turns with expected production (not sampled dice, to keep it deterministic and cheap) and score the resulting position against the archetype target profile.
 
 Keep K small. The point is planning, not raw search depth. If the agent wins purely because it searches deeper, the result is about search, not strategy. Record search depth as an experimental variable and run an ablation with lookahead disabled, so the contribution of planning versus lookahead can be separated.
+
+### Implementation: lookahead (`src/agents/lookahead.py`)
+
+`StrategicAgent(horizon=2, top_k=3)`; `horizon=0` is `AgentB_noLookahead`.
+
+**When it runs.** Only on main phase build decisions: the option list contains `END_TURN` and nothing but builds, dev card buys, bank trades and end turn. Robber, discard, dev card plays and placement are untouched.
+
+**Shortlist.** The top `K = 3` actions whose evaluator score beats a pass, plus `END_TURN`. The agent chooses only from this shortlist. Everything else is ranked below it, so a move the rollout never looked at cannot win by default.
+
+**Rollout.** From the position after the candidate action, deterministic and on the state dict (no engine copy):
+
+1. Unless the candidate is `END_TURN`, keep buying this turn, undiscounted.
+2. Then for each of `horizon` future turns: charge expected discard loss on the current hand (cards over 7, two rolls a turn, valued at the VP weight per 4 cards), add two rolls of `expected_production` (robber respected), and buy, discounted by `0.8^t`.
+3. Buying is greedy, up to 3 items a turn, over everything affordable with **whole** cards (bank and port trades allowed): cities, settlements on buildable nodes, roads on buildable edges, dev cards. Each candidate purchase is scored by the **same** `StrategicAgent.score` used for real moves (base score, plan weight, milestone bonus), and the best one above the pass score is bought.
+
+Candidate value = evaluator score + rollout total, except a bank trade, whose value is the rollout alone, because Agent A's trade score already counts the item the trade unlocks.
+
+**What went wrong on the way** (all on tuning seeds, each against frozen Agent A). These are recorded because each one is a way a lookahead can quietly favor waiting:
+
+| Version | h=1 | h=2 | h=3 | Problem found |
+|---|---|---|---|---|
+| first cut, 200 pairs | | 0.505 | 0.480 | rollout skipped the rest of the current turn, so a trade that sets up a build this turn looked a turn late |
+| + same turn buys, discard risk | 0.487 | 0.470 | 0.448 | rollout never bought roads, and fractional cards counted as affordable |
+| + roads, whole cards | 0.482 | 0.460 | 0.435 | rollout priced purchases with a simpler formula than the real evaluator, so the same road was worth more next turn than now |
+| + shared scoring, no trade double count | 0.470 | 0.453 | 0.450 | speculative trades with nothing to build |
+| + shortlist of worthwhile moves only, 600 pairs | | 0.444 | | moves off the shortlist could beat a discard-penalized end turn |
+| + choose only from the shortlist, 600 pairs | 0.477 | 0.466 | 0.468 | none found |
+
+Win rate falling steadily as the horizon grows was the tell each time: the rollout was systematically overvaluing the future relative to acting now. **Final result:** against the no-lookahead agent's 0.474 on the same 600 pairs, lookahead is neutral at every horizon (0.466 to 0.477, interval about ±0.028). Kept at `horizon=2` per the design above; the `noLookahead` ablation in Phase 5 will measure it properly on evaluation seeds. A deterministic expected-value rollout cannot see the option value of waiting for real dice, which may be why it adds little here.
 
 ## Layer 3: Reactor
 

@@ -1,6 +1,7 @@
 from catanatron.models.enums import ActionType
 
 from src.agents.agent_a import GreedyAgent, with_road
+from src.agents.lookahead import HORIZON, TOP_K, Lookahead
 from src.agents.planner import REACH, Planner
 from src.common.board import road_distance
 from src.common.economy import COSTS, can_afford
@@ -42,11 +43,12 @@ def milestone_item(mile):
 class StrategicAgent:
     name = "strategic"
 
-    def __init__(self, replan=True, bonus=MILESTONE_BONUS, mix=PLACEMENT_MIX):
+    def __init__(self, replan=True, bonus=MILESTONE_BONUS, mix=PLACEMENT_MIX, horizon=HORIZON, top_k=TOP_K):
         self.base = GreedyAgent()
         self.planner = Planner(replan=replan)
         self.bonus = bonus
         self.mix = mix
+        self.look = Lookahead(self, horizon=horizon, top_k=top_k)
 
     def decide(self, state, actions):
         if len(actions) == 1:
@@ -60,7 +62,8 @@ class StrategicAgent:
         weights = arch.action_weights(state)
         mile = arch.next_milestone(state)
         cache = {}
-        return [self.score(state, a, arch, weights, mile, cache) for a in actions]
+        scores = [self.score(state, a, arch, weights, mile, cache) for a in actions]
+        return self.look.adjust(state, actions, scores, arch)
 
     def score(self, state, act, arch, weights, mile, cache):
         kind = KINDS.get(act.action_type)
